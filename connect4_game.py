@@ -4,52 +4,32 @@ import sys
 # Constants
 WIDTH, HEIGHT = 7, 6
 CELL_SIZE = 100
-WINDOW_SIZE = (
-    WIDTH * CELL_SIZE,
-    (HEIGHT + 1) * CELL_SIZE,
-)  # Extra row for displaying the current player
+WINDOW_SIZE = (WIDTH * CELL_SIZE, (HEIGHT + 1) * CELL_SIZE)  # Extra row for displaying the current player
 FPS = 30
 
 # Colors
-BLACK = (0, 0, 0)
+BACKGROUND_COLOR = (200, 200, 200)  # Neutral background color
+GRID_COLOR = (0, 0, 0)  # Grid color
 RED = (255, 0, 0)
-BLUE = (0, 0, 255)
 YELLOW = (255, 255, 0)
+BLUE = (0, 0, 255)
 
 # Initialize pygame
 pygame.init()
-
 
 # Function to draw the Connect 4 board
 def draw_board(screen, board):
     for col in range(WIDTH):
         for row in range(HEIGHT):
-            pygame.draw.rect(
-                screen,
-                BLACK,
-                (col * CELL_SIZE, (row + 1) * CELL_SIZE, CELL_SIZE, CELL_SIZE),
-            )
+            pygame.draw.rect(screen, BACKGROUND_COLOR, (col * CELL_SIZE, (row + 1) * CELL_SIZE, CELL_SIZE, CELL_SIZE))
+            pygame.draw.circle(screen, GRID_COLOR, (col * CELL_SIZE + CELL_SIZE // 2, (row + 1) * CELL_SIZE + CELL_SIZE // 2),
+                               CELL_SIZE // 2, 5)  # Draw grid circles
             if board[row][col] == 1:
-                pygame.draw.circle(
-                    screen,
-                    RED,
-                    (
-                        col * CELL_SIZE + CELL_SIZE // 2,
-                        (row + 1) * CELL_SIZE + CELL_SIZE // 2,
-                    ),
-                    CELL_SIZE // 2 - 5,
-                )
+                pygame.draw.circle(screen, RED, (col * CELL_SIZE + CELL_SIZE // 2, (row + 1) * CELL_SIZE + CELL_SIZE // 2),
+                                   CELL_SIZE // 2 - 5)
             elif board[row][col] == 2:
-                pygame.draw.circle(
-                    screen,
-                    BLUE,
-                    (
-                        col * CELL_SIZE + CELL_SIZE // 2,
-                        (row + 1) * CELL_SIZE + CELL_SIZE // 2,
-                    ),
-                    CELL_SIZE // 2 - 5,
-                )
-
+                pygame.draw.circle(screen, BLUE, (col * CELL_SIZE + CELL_SIZE // 2, (row + 1) * CELL_SIZE + CELL_SIZE // 2),
+                                   CELL_SIZE // 2 - 5)
 
 # Function to drop a disc in a column
 def drop_disc(board, col, player):
@@ -59,28 +39,24 @@ def drop_disc(board, col, player):
             return True
     return False
 
-
 # Function to check for a win
 def check_win(board, player):
-    # Check horizontally
+    # Check horizontally, vertically, and diagonally (similar to the previous code)
     for row in range(HEIGHT):
         for col in range(WIDTH - 3):
             if all(board[row][col + i] == player for i in range(4)):
                 return True
 
-    # Check vertically
     for col in range(WIDTH):
         for row in range(HEIGHT - 3):
             if all(board[row + i][col] == player for i in range(4)):
                 return True
 
-    # Check diagonally (bottom-left to top-right)
     for row in range(3, HEIGHT):
         for col in range(WIDTH - 3):
             if all(board[row - i][col + i] == player for i in range(4)):
                 return True
 
-    # Check diagonally (top-left to bottom-right)
     for row in range(HEIGHT - 3):
         for col in range(WIDTH - 3):
             if all(board[row + i][col + i] == player for i in range(4)):
@@ -88,21 +64,18 @@ def check_win(board, player):
 
     return False
 
-
 # Function to check for a draw
 def check_draw(board):
     return all(board[0][col] != 0 for col in range(WIDTH))
-
 
 # Function to reset the game
 def reset_game():
     return [[0] * WIDTH for _ in range(HEIGHT)]
 
-
 # Main game loop
 def main():
     screen = pygame.display.set_mode(WINDOW_SIZE)
-    pygame.display.set_caption("Connect 4")
+    pygame.display.set_caption('Connect 4')
 
     clock = pygame.time.Clock()
 
@@ -128,20 +101,15 @@ def main():
                         else:
                             current_player = 3 - current_player  # Switch players
 
-        screen.fill(BLACK)
+        screen.fill(BACKGROUND_COLOR)
         draw_board(screen, board)
 
         # Display current player
-        pygame.draw.circle(
-            screen,
-            RED if current_player == 1 else YELLOW,
-            (WIDTH * CELL_SIZE // 2, CELL_SIZE // 2),
-            CELL_SIZE // 2 - 5,
-        )
+        pygame.draw.circle(screen, RED if current_player == 1 else BLUE, (WIDTH * CELL_SIZE // 2, CELL_SIZE // 2),
+                           CELL_SIZE // 2 - 5)
 
         pygame.display.flip()
         clock.tick(FPS)
-
 
 if __name__ == "__main__":
     main()
