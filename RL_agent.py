@@ -79,7 +79,7 @@ def model_init():
 
     # Training loop
     num_episodes = 1000
-    max_steps_per_episode = 30  # You can adjust this value
+    max_steps_per_episode = 40  # You can adjust this value
     print("starting training")
     for episode in range(1, num_episodes + 1):
         state = np.zeros((1, 3, HEIGHT, WIDTH), dtype=np.float32)  # Initial state
