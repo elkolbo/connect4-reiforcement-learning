@@ -97,27 +97,48 @@ def count_adjacent_discs(board, action):
             adjacent_count += 1
     return adjacent_count
 
+def training_opponent(opponent="rand"):
+    if opponent=="rand":
+        action=np.random.randint(NUM_ACTIONS)
+
+    return action
+
 def model_init():
-    # Initialize DQN model and optimizer
-    model = DQN(num_actions=NUM_ACTIONS)
-    optimizer = tf.keras.optimizers.Adam(learning_rate=0.001)
+    train_from_start=False
+    if train_from_start:
+        # Initialize DQN model and optimizer
+        model = DQN(num_actions=NUM_ACTIONS)
+        optimizer = tf.keras.optimizers.Adam(learning_rate=0.001)
 
-    # Initialize replay buffer
-    replay_buffer = ReplayBuffer(capacity=10000)
+        # Initialize replay buffer
+        replay_buffer = ReplayBuffer(capacity=10000)
 
-    # Training parameters
-    gamma = 0.99  # Discount factor
-    epsilon_start = 1.0  # Initial exploration rate
-    epsilon_end = 0.01  # Final exploration rate
-    epsilon_decay = 0.999  # Exploration rate decay
-    target_update_frequency = 10  # Update target network every N episodes
-    batch_size = 64
+        # Training parameters
+        gamma = 0.99  # Discount factor
+        epsilon_start = 1.0  # Initial exploration rate
+        epsilon_end = 0.01  # Final exploration rate
+        epsilon_decay = 0.999  # Exploration rate decay
+        target_update_frequency = 10  # Update target network every N episodes
+        batch_size = 64
 
-    model.compile(optimizer='adam', loss='mse')
+        model.compile(optimizer='adam', loss='mse')
+    else: 
+        model = tf.keras.models.load_model(r"C:\Users\loren\Documents\AI_BME\FinalProject\connect4-reiforcement-learning\saved_model.tf")
+        gamma = 0.99  # Discount factor
+        epsilon_start = 1.0  # Initial exploration rate
+        epsilon_end = 0.01  # Final exploration rate
+        epsilon_decay = 0.999  # Exploration rate decay
+        target_update_frequency = 10  # Update target network every N episodes
+        batch_size = 64
 
+        # Initialize replay buffer
+        replay_buffer = ReplayBuffer(capacity=10000)
+        
+        optimizer = tf.keras.optimizers.Adam(learning_rate=0.001)
+        model.compile(optimizer='adam', loss='mse')
 
     # Training loop
-    num_episodes = 1000
+    num_episodes = 100
     max_steps_per_episode = 40  # You can adjust this value
     print("starting training")
     for episode in range(1, num_episodes + 1):
@@ -130,7 +151,7 @@ def model_init():
             action = epsilon_greedy_action(state, epsilon, model)
 
             # Simulate environment (in this case, play a random opponent)
-            opponent_action = np.random.randint(NUM_ACTIONS)
+            opponent_action = min([WIDTH,step%10])
             next_state = board_to_numpy(np.zeros((HEIGHT, WIDTH), dtype=np.int64), 3 - (episode % 2) + 1)  # Opponent's turn
             reward = 0  # Reward is 0 during gameplay
 
