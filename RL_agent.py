@@ -58,78 +58,92 @@ def board_to_numpy(board, current_player):
     array[:, :, 2] = (board == 0).astype(np.float32)  # Empty spaces
     return array.transpose((2, 0, 1))[np.newaxis, :]  # Add batch dimension
 
-# Initialize DQN model and optimizer
-model = DQN(num_actions=NUM_ACTIONS)
-optimizer = tf.keras.optimizers.Adam(learning_rate=0.001)
+def model_init():
+    # Initialize DQN model and optimizer
+    model = DQN(num_actions=NUM_ACTIONS)
+    optimizer = tf.keras.optimizers.Adam(learning_rate=0.001)
 
-# Initialize replay buffer
-replay_buffer = ReplayBuffer(capacity=10000)
+    # Initialize replay buffer
+    replay_buffer = ReplayBuffer(capacity=10000)
 
-# Training parameters
-gamma = 0.99  # Discount factor
-epsilon_start = 1.0  # Initial exploration rate
-epsilon_end = 0.01  # Final exploration rate
-epsilon_decay = 0.999  # Exploration rate decay
-target_update_frequency = 10  # Update target network every N episodes
-batch_size = 64
+    # Training parameters
+    gamma = 0.99  # Discount factor
+    epsilon_start = 1.0  # Initial exploration rate
+    epsilon_end = 0.01  # Final exploration rate
+    epsilon_decay = 0.999  # Exploration rate decay
+    target_update_frequency = 10  # Update target network every N episodes
+    batch_size = 64
 
-model.compile(optimizer='adam', loss='mse')
+    model.compile(optimizer='adam', loss='mse')
 
 
-# Training loop
-num_episodes = 1000
-print("starting training")
-for episode in range(1, num_episodes + 1):
-    state = np.zeros((1, 3, HEIGHT, WIDTH), dtype=np.float32)  # Initial state
-    done = False
+    # Training loop
+    num_episodes = 1000
+    print("starting training")
+    for episode in range(1, num_episodes + 1):
+        state = np.zeros((1, 3, HEIGHT, WIDTH), dtype=np.float32)  # Initial state
+        done = False
 
-    while not done:
-        epsilon = max(epsilon_end, epsilon_start * epsilon_decay ** episode)
-        action = epsilon_greedy_action(state, epsilon, model)
+        while not done:
+            epsilon = max(epsilon_end, epsilon_start * epsilon_decay ** episode)
+            action = epsilon_greedy_action(state, epsilon, model)
 
-        # Simulate environment (in this case, play a random opponent)
-        opponent_action = np.random.randint(NUM_ACTIONS)
-        next_state = board_to_numpy(np.zeros((HEIGHT, WIDTH), dtype=np.int64), 3 - (episode % 2) + 1)  # Opponent's turn
-        reward = 0  # Reward is 0 during gameplay
+            # Simulate environment (in this case, play a random opponent)
+            opponent_action = np.random.randint(NUM_ACTIONS)
+            next_state = board_to_numpy(np.zeros((HEIGHT, WIDTH), dtype=np.int64), 3 - (episode % 2) + 1)  # Opponent's turn
+            reward = 0  # Reward is 0 during gameplay
 
-        # Check if the action is valid and update the board
-        if np.sum(state[0, 0]) < HEIGHT * WIDTH and state[0, 0, :, action].sum() == 0:
-            reward = 1  # The player gets a reward for making a valid move
-            state[0, 0, :, action] = 1  # Update the board
+            # Check if the action is valid and update the board
+            if np.sum(state[0, 0]) < HEIGHT * WIDTH and state[0, 0, :, action].sum() == 0:
+                reward = 1  # The player gets a reward for making a valid move
+                state[0, 0, :, action] = 1  # Update the board
 
-        next_state[0, 1] = state[0, 0].copy()  # Copy the current player's discs
-        state = next_state.copy()
+            next_state[0, 1] = state[0, 0].copy()  # Copy the current player's discs
+            state = next_state.copy()
 
-        # Store the experience in the replay buffer
-        replay_buffer.push(state, action, next_state, reward)
+            # Store the experience in the replay buffer
+            replay_buffer.push(state, action, next_state, reward)
 
-        # Sample a random batch from the replay buffer and perform a Q-learning update
-        if len(replay_buffer.memory) > batch_size:
-            batch = replay_buffer.sample(batch_size)
-            states, actions, next_states, rewards = zip(*batch)
+            # Sample a random batch from the replay buffer and perform a Q-learning update
+            if len(replay_buffer.memory) > batch_size:
+                batch = replay_buffer.sample(batch_size)
+                states, actions, next_states, rewards = zip(*batch)
 
-            states = np.concatenate(states)
-            actions = np.array(actions, dtype=np.int32).reshape(-1, 1)
-            next_states = np.concatenate(next_states)
-            rewards = np.array(rewards, dtype=np.float32).reshape(-1, 1)
+                states = np.concatenate(states)
+                actions = np.array(actions, dtype=np.int32).reshape(-1, 1)
+                next_states = np.concatenate(next_states)
+                rewards = np.array(rewards, dtype=np.float32).reshape(-1, 1)
 
-            # Create a new GradientTape for each iteration
-            with tf.GradientTape() as tape:
-                current_q_values = model(states, training=True)
-                current_q_values = tf.reduce_sum(tf.one_hot(actions, NUM_ACTIONS) * current_q_values, axis=1, keepdims=True)
+                # Create a new GradientTape for each iteration
+                with tf.GradientTape() as tape:
+                    current_q_values = model(states, training=True)
+                    current_q_values = tf.reduce_sum(tf.one_hot(actions, NUM_ACTIONS) * current_q_values, axis=1, keepdims=True)
 
-                next_q_values = model(next_states, training=True)
-                next_q_values = tf.reduce_max(next_q_values, axis=1, keepdims=True)
+                    next_q_values = model(next_states, training=True)
+                    next_q_values = tf.reduce_max(next_q_values, axis=1, keepdims=True)
 
-                target_q_values = rewards + gamma * next_q_values
+                    target_q_values = rewards + gamma * next_q_values
 
-                loss = tf.reduce_mean(tf.square(current_q_values - target_q_values))
+                    loss = tf.reduce_mean(tf.square(current_q_values - target_q_values))
 
-            gradients = tape.gradient(loss, model.trainable_variables)
-            optimizer.apply_gradients(zip(gradients, model.trainable_variables))
+                gradients = tape.gradient(loss, model.trainable_variables)
+                optimizer.apply_gradients(zip(gradients, model.trainable_variables))
 
-    # Print statistics
-    if episode % 10 == 0:
-        print(f"Episode: {episode}, Epsilon: {epsilon:.3f}")
+        # Print statistics
+        if episode % 10 == 0:
+            print(f"Episode: {episode}, Epsilon: {epsilon:.3f}")
 
-print("Training complete.")
+    print("Training complete.")
+    model.save()
+    return model
+
+
+def get_rl_action(board):
+    state = board_to_numpy(board, 2)  # Assuming RL agent is player 2
+    q_values = model.predict(state)
+    return np.argmax(q_values)
+
+if __name__=="__main__":
+    model=model_init()
+
+

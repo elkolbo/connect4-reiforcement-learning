@@ -1,5 +1,6 @@
 import pygame
 import sys
+from RL_agent import get_rl_action
 
 # Constants
 WIDTH, HEIGHT = 7, 6
@@ -13,6 +14,10 @@ GRID_COLOR = (0, 0, 0)  # Grid color
 RED = (255, 0, 0)
 YELLOW = (255, 255, 0)
 BLUE = (0, 0, 255)
+
+# Define constants for players
+HUMAN_PLAYER = 1
+RL_PLAYER = 2
 
 # Initialize pygame
 pygame.init()
@@ -88,7 +93,7 @@ def main():
                 pygame.quit()
                 sys.exit()
 
-            if event.type == pygame.MOUSEBUTTONDOWN:
+            if event.type == pygame.MOUSEBUTTONDOWN and current_player == HUMAN_PLAYER:
                 column = event.pos[0] // CELL_SIZE
                 if 0 <= column < WIDTH and board[0][column] == 0:
                     if drop_disc(board, column, current_player):
@@ -100,6 +105,12 @@ def main():
                             board = reset_game()
                         else:
                             current_player = 3 - current_player  # Switch players
+            # Add logic for RL agent's move
+            if current_player == RL_PLAYER:
+                # Get the RL agent's action
+                rl_action = get_rl_action(board)
+                # Update the board based on the RL agent's move
+                drop_disc(board, rl_action, RL_PLAYER)
 
         screen.fill(BACKGROUND_COLOR)
         draw_board(screen, board)
