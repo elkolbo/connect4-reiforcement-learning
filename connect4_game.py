@@ -1,5 +1,7 @@
 import pygame
 import sys
+import tensorflow as tf
+import random
 from RL_agent import get_rl_action, DQN
 
 # Constants
@@ -80,9 +82,8 @@ def reset_game():
 # Main game loop
 def main():
     # If you want to play the game with a pre-trained model, uncomment the lines below
-    #model = DQN()
-    #model.load_weights("path/to/your/saved/model/weights")
-
+    model = DQN()
+    model = tf.keras.models.load_model(r"C:\Users\loren\Documents\AI_BME\FinalProject\connect4-reiforcement-learning\saved_model.tf")
     screen = pygame.display.set_mode(WINDOW_SIZE)
     pygame.display.set_caption('Connect 4')
 
@@ -112,9 +113,9 @@ def main():
             # Add logic for RL agent's move
             if current_player == RL_PLAYER:
                 # Get the RL agent's action
-                #rl_action = get_rl_action(board)
+                rl_action = get_rl_action(board,model)
                 # Update the board based on the RL agent's move
-                if drop_disc(board, 1, current_player):
+                if drop_disc(board,rl_action , current_player):
                     if check_win(board, current_player):
                         print(f"Player {current_player} wins!")
                         board = reset_game()
@@ -123,6 +124,16 @@ def main():
                         board = reset_game()
                     else:
                         current_player = 3 - current_player  # Switch players
+                elif drop_disc(board, random.randint(0, WIDTH) , current_player): ##make random action if agent finds no action
+                    if check_win(board, current_player):
+                        print(f"Player {current_player} wins!")
+                        board = reset_game()
+                    elif check_draw(board):
+                        print("It's a draw!")
+                        board = reset_game()
+                    else:
+                        current_player = 3 - current_player  # Switch players
+        
 
         screen.fill(BACKGROUND_COLOR)
         draw_board(screen, board)

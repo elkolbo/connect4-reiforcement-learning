@@ -9,7 +9,7 @@ STATE_SHAPE = (3, HEIGHT, WIDTH)  # 3 channels for current player, opponent, and
 
 # Deep Q Network (DQN) Model
 class DQN(tf.keras.Model):
-    def __init__(self, num_actions):
+    def __init__(self, num_actions=WIDTH):
         super(DQN, self).__init__()
         self.conv1 = tf.keras.layers.Conv2D(32, (3, 3), strides=(1, 1), padding='same', activation='relu')
         self.conv2 = tf.keras.layers.Conv2D(64, (3, 3), strides=(1, 1), padding='same', activation='relu')
@@ -50,12 +50,12 @@ def epsilon_greedy_action(state, epsilon, model):
         q_values = model.predict(state)
         return np.argmax(q_values)  # Exploit
 
-# Convert Connect 4 board to NumPy array
+# Convert Connect 4 board to NumPy array and make input indifferent -> doesnt matter which player number the agent has
 def board_to_numpy(board, current_player):
     array = np.zeros((HEIGHT, WIDTH, 3), dtype=np.float32)
-    array[:, :, 0] = (board == current_player).astype(np.float32)  # Current player's discs
-    array[:, :, 1] = (board == 3 - current_player).astype(np.float32)  # Opponent's discs
-    array[:, :, 2] = (board == 0).astype(np.float32)  # Empty spaces
+    array[:, :, 0] = (board == current_player) # Current player's discs
+    array[:, :, 1] = (board == 3 - current_player)  # Opponent's discs
+    array[:, :, 2] = (board == 0) # Empty spaces
     return array.transpose((2, 0, 1))[np.newaxis, :]  # Add batch dimension
 
 def model_init():
@@ -78,13 +78,15 @@ def model_init():
 
 
     # Training loop
-    num_episodes = 1000
+    num_episodes = 2
+    max_steps_per_episode = 5  # You can adjust this value
     print("starting training")
     for episode in range(1, num_episodes + 1):
         state = np.zeros((1, 3, HEIGHT, WIDTH), dtype=np.float32)  # Initial state
         done = False
-
-        while not done:
+        step = 0  # Counter for steps in the episode
+        print(episode)
+        while not done and step < max_steps_per_episode:
             epsilon = max(epsilon_end, epsilon_start * epsilon_decay ** episode)
             action = epsilon_greedy_action(state, epsilon, model)
 
@@ -129,16 +131,22 @@ def model_init():
                 gradients = tape.gradient(loss, model.trainable_variables)
                 optimizer.apply_gradients(zip(gradients, model.trainable_variables))
 
+            # Increment the step counter
+            step += 1
+
         # Print statistics
         if episode % 10 == 0:
             print(f"Episode: {episode}, Epsilon: {epsilon:.3f}")
 
     print("Training complete.")
-    model.save()
+    dummy_input = np.zeros((1, 3, HEIGHT, WIDTH), dtype=np.float32)
+    model(dummy_input)
+    model.save(r"C:\Users\loren\Documents\AI_BME\FinalProject\connect4-reiforcement-learning\saved_model.tf")
+
     return model
 
 
-def get_rl_action(board):
+def get_rl_action(board,model):
     state = board_to_numpy(board, 2)  # Assuming RL agent is player 2
     q_values = model.predict(state)
     return np.argmax(q_values)
