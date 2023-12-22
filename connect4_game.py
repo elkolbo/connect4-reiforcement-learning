@@ -114,6 +114,7 @@ def main():
             if current_player == RL_PLAYER:
                 # Get the RL agent's action
                 rl_action = get_rl_action(board,model)
+                print(rl_action)
                 # Update the board based on the RL agent's move
                 if drop_disc(board,rl_action , current_player):
                     if check_win(board, current_player):
@@ -124,7 +125,7 @@ def main():
                         board = reset_game()
                     else:
                         current_player = 3 - current_player  # Switch players
-                elif drop_disc(board, random.randint(0, WIDTH) , current_player): ##make random action if agent finds no action
+                elif drop_disc(board, random.randint(0, WIDTH-1) , current_player): ##make random action if agent finds no action
                     if check_win(board, current_player):
                         print(f"Player {current_player} wins!")
                         board = reset_game()
