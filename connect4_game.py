@@ -1,6 +1,6 @@
 import pygame
 import sys
-from RL_agent import get_rl_action
+from RL_agent import get_rl_action, DQN
 
 # Constants
 WIDTH, HEIGHT = 7, 6
@@ -79,6 +79,10 @@ def reset_game():
 
 # Main game loop
 def main():
+    # If you want to play the game with a pre-trained model, uncomment the lines below
+    #model = DQN()
+    #model.load_weights("path/to/your/saved/model/weights")
+
     screen = pygame.display.set_mode(WINDOW_SIZE)
     pygame.display.set_caption('Connect 4')
 
@@ -108,9 +112,17 @@ def main():
             # Add logic for RL agent's move
             if current_player == RL_PLAYER:
                 # Get the RL agent's action
-                rl_action = get_rl_action(board)
+                #rl_action = get_rl_action(board)
                 # Update the board based on the RL agent's move
-                drop_disc(board, rl_action, RL_PLAYER)
+                if drop_disc(board, 1, current_player):
+                    if check_win(board, current_player):
+                        print(f"Player {current_player} wins!")
+                        board = reset_game()
+                    elif check_draw(board):
+                        print("It's a draw!")
+                        board = reset_game()
+                    else:
+                        current_player = 3 - current_player  # Switch players
 
         screen.fill(BACKGROUND_COLOR)
         draw_board(screen, board)
