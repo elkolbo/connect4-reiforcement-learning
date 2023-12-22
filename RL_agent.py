@@ -58,6 +58,45 @@ def board_to_numpy(board, current_player):
     array[:, :, 2] = (board == 0) # Empty spaces
     return array.transpose((2, 0, 1))[np.newaxis, :]  # Add batch dimension
 
+def calculate_reward(board, action):
+    # Customize your reward calculation based on the desired criteria
+    reward = 1  # Default reward for making a valid move
+
+    # Check if the action is valid and update the board
+    if np.sum(board) < HEIGHT * WIDTH and board[:, action].sum() == 0:
+        # Check if placing a disc prevents the opponent from connecting four
+        if is_blocking_opponent(board, action):
+            reward += 10  # Give a significant reward for blocking the opponent
+
+        # Check if placing a disc next to many of your own
+        adjacent_count = count_adjacent_discs(board, action)
+        reward += 0.1 * adjacent_count  # Increase reward based on the count
+
+        # Update the board
+        board[0, action] = 1
+
+    return reward
+
+def is_blocking_opponent(board, action):
+    # Check if placing a disc at the given action blocks the opponent from connecting four
+    temp_board = board.copy()
+    temp_board[0, action] = 1
+
+    # Iterate through possible 4-connect locations for the opponent
+    for i in range(WIDTH):
+        if temp_board[0, i] == 0 and np.sum(temp_board[:, i]) == HEIGHT - 1:
+            return True  # Blocking the opponent
+
+    return False  # Not blocking the opponent
+
+def count_adjacent_discs(board, action):
+    # Count the number of adjacent discs in the same row
+    adjacent_count = 0
+    for offset in [-1, 1]:
+        if 0 <= action + offset < WIDTH and board[0, action + offset] == 1:
+            adjacent_count += 1
+    return adjacent_count
+
 def model_init():
     # Initialize DQN model and optimizer
     model = DQN(num_actions=NUM_ACTIONS)
@@ -97,7 +136,7 @@ def model_init():
 
             # Check if the action is valid and update the board
             if np.sum(state[0, 0]) < HEIGHT * WIDTH and state[0, 0, :, action].sum() == 0:
-                reward = 1  # The player gets a reward for making a valid move
+                reward = calculate_reward(state[0, 0], action)  # The player gets a reward for making a valid move
                 state[0, 0, :, action] = 1  # Update the board
 
             next_state[0, 1] = state[0, 0].copy()  # Copy the current player's discs
