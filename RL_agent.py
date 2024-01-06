@@ -59,8 +59,33 @@ def board_to_numpy(board, current_player):
     return array.transpose((2, 0, 1))[np.newaxis, :]  # Add batch dimension
 
 def calculate_reward(board, action):
-    # Customize your reward calculation based on the desired criteria
-    reward = 1  # Default reward for making a valid move
+
+    reward = 0  # Default reward
+
+    # Check if the action is valid and update the board
+    if np.sum(board) < HEIGHT * WIDTH and board[:, action].sum() == 0:
+        # Check if placing a disc prevents the opponent from connecting four
+        if is_blocking_opponent(board, action):
+            reward += 10  # Give a significant reward for blocking the opponent
+
+        # Check if placing a disc next to many of your own
+        adjacent_count = count_adjacent_discs(board, action)
+        reward += 0.1 * adjacent_count  # Increase reward based on the count
+
+        # Check if the move leads to a win
+        # if is_winning_move(board, action):
+        #     reward += 100  # Give a high reward for winning the game
+
+        # # Check for a row of 3
+        # if has_row_of_3(board, action):
+        #     reward += 5  # Give a moderate reward for a row of 3
+
+        # # Check for a row of 2
+        # if has_row_of_2(board, action):
+        #     reward += 0.1  # Give a small reward for a row of 2
+
+        # Update the board
+        board[0, action] = 1
 
     # Check if the action is valid and update the board
     if np.sum(board) < HEIGHT * WIDTH and board[:, action].sum() == 0:
@@ -138,7 +163,7 @@ def model_init():
         model.compile(optimizer='adam', loss='mse')
 
     # Training loop
-    num_episodes = 100
+    num_episodes = 800
     max_steps_per_episode = 40  # You can adjust this value
     print("starting training")
     for episode in range(1, num_episodes + 1):

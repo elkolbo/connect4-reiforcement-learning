@@ -48,7 +48,7 @@ def drop_disc(board, col, player):
 
 # Function to check for a win
 def check_win(board, player):
-    # Check horizontally, vertically, and diagonally (similar to the previous code)
+    # Check horizontally, vertically, and diagonally
     for row in range(HEIGHT):
         for col in range(WIDTH - 3):
             if all(board[row][col + i] == player for i in range(4)):
