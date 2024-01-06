@@ -122,10 +122,13 @@ def count_adjacent_discs(board, action):
             adjacent_count += 1
     return adjacent_count
 
-def training_opponent(opponent="rand"):
+def training_opponent(opponent="rand",opponent_model=None):
     if opponent=="rand":
         action=np.random.randint(NUM_ACTIONS)
 
+    if opponent =="self":
+        pass
+        
     return action
 
 def model_init():
@@ -161,9 +164,11 @@ def model_init():
         
         optimizer = tf.keras.optimizers.Adam(learning_rate=0.001)
         model.compile(optimizer='adam', loss='mse')
+    ## init opponent model
+    opponent_model = DQN(num_actions=NUM_ACTIONS)
 
     # Training loop
-    num_episodes = 800
+    num_episodes = 100
     max_steps_per_episode = 40  # You can adjust this value
     print("starting training")
     for episode in range(1, num_episodes + 1):
@@ -175,21 +180,20 @@ def model_init():
             epsilon = max(epsilon_end, epsilon_start * epsilon_decay ** episode)
             action = epsilon_greedy_action(state, epsilon, model)
 
-            # Simulate environment (in this case, play a random opponent)
-            opponent_action = min([WIDTH,step%10])
-            next_state = board_to_numpy(np.zeros((HEIGHT, WIDTH), dtype=np.int64), 3 - (episode % 2) + 1)  # Opponent's turn
-            reward = 0  # Reward is 0 during gameplay
+            # Simulate opponent's environment
+            opponent_action =  epsilon_greedy_action(state, epsilon, opponent_model)
+            
+            # Check if the opponent's action is valid and update the shared board
+            if np.sum(state[0, 1]) < HEIGHT * WIDTH and state[0, 1, :, opponent_action].sum() == 0:
+                state[0, 1, :, opponent_action] = 1
 
-            # Check if the action is valid and update the board
+            # Update the player's board based on their action
             if np.sum(state[0, 0]) < HEIGHT * WIDTH and state[0, 0, :, action].sum() == 0:
-                reward = calculate_reward(state[0, 0], action)  # The player gets a reward for making a valid move
-                state[0, 0, :, action] = 1  # Update the board
-
-            next_state[0, 1] = state[0, 0].copy()  # Copy the current player's discs
-            state = next_state.copy()
+                reward = calculate_reward(state[0, 0], action)
+                state[0, 0, :, action] = 1
 
             # Store the experience in the replay buffer
-            replay_buffer.push(state, action, next_state, reward)
+            replay_buffer.push(state, action, state, reward)  # Use the same state for both player and opponent
 
             # Sample a random batch from the replay buffer and perform a Q-learning update
             if len(replay_buffer.memory) > batch_size:
@@ -201,7 +205,6 @@ def model_init():
                 next_states = np.concatenate(next_states)
                 rewards = np.array(rewards, dtype=np.float32).reshape(-1, 1)
 
-                # Create a new GradientTape for each iteration
                 with tf.GradientTape() as tape:
                     current_q_values = model(states, training=True)
                     current_q_values = tf.reduce_sum(tf.one_hot(actions, NUM_ACTIONS) * current_q_values, axis=1, keepdims=True)
@@ -216,12 +219,19 @@ def model_init():
                 gradients = tape.gradient(loss, model.trainable_variables)
                 optimizer.apply_gradients(zip(gradients, model.trainable_variables))
 
+
+                if episode % 10 == 0:
+                    # Update opponent model
+                    opponent_model.set_weights(model.get_weights())
+
             # Increment the step counter
             step += 1
 
-        # Print statistics
-        if episode % 10 == 0:
-            print(f"Episode: {episode}, Epsilon: {epsilon:.3f}")
+
+
+            # Print statistics
+            if episode % 10 == 0:
+                print(f"Episode: {episode}, Epsilon: {epsilon:.3f}")
 
     print("Training complete.")
     dummy_input = np.zeros((1, 3, HEIGHT, WIDTH), dtype=np.float32)
@@ -238,5 +248,6 @@ def get_rl_action(board,model):
 
 if __name__=="__main__":
     model=model_init()
+
 
 
