@@ -8,7 +8,7 @@ from RL_agent import get_rl_action, DQN
 WIDTH, HEIGHT = 7, 6
 CELL_SIZE = 100
 WINDOW_SIZE = (WIDTH * CELL_SIZE, (HEIGHT + 1) * CELL_SIZE)  # Extra row for displaying the current player
-FPS = 30
+FPS = 30 
 
 # Colors
 BACKGROUND_COLOR = (200, 200, 200)  # Neutral background color

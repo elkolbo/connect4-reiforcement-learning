@@ -5,7 +5,7 @@ import random
 # Constants
 WIDTH, HEIGHT = 7, 6
 NUM_ACTIONS = WIDTH
-STATE_SHAPE = (3, HEIGHT, WIDTH)  # 3 channels for current player, opponent, and empty spaces
+STATE_SHAPE = (2, HEIGHT, WIDTH)  # 3 channels for current player, opponent, and empty spaces
 
 # Deep Q Network (DQN) Model
 class DQN(tf.keras.Model):
@@ -25,6 +25,15 @@ class DQN(tf.keras.Model):
         x = self.flatten(x)
         x = self.fc1(x)
         return self.fc2(x)
+
+    def set_custom_weights(self, weights):
+        # Set custom weights for each layer
+        self.conv1.set_weights(weights[0:2])
+        self.conv2.set_weights(weights[2:4])
+        self.conv3.set_weights(weights[4:6])
+        self.fc1.set_weights(weights[6:8])
+        self.fc2.set_weights(weights[8:10])
+
 
 # Experience Replay Buffer
 class ReplayBuffer:
@@ -50,152 +59,231 @@ def epsilon_greedy_action(state, epsilon, model):
         q_values = model.predict(state)
         return np.argmax(q_values)  # Exploit
 
-# Convert Connect 4 board to NumPy array and make input indifferent -> doesnt matter which player number the agent has
-def board_to_numpy(board, current_player):
-    array = np.zeros((HEIGHT, WIDTH, 3), dtype=np.float32)
-    array[:, :, 0] = (board == current_player) # Current player's discs
-    array[:, :, 1] = (board == 3 - current_player)  # Opponent's discs
-    array[:, :, 2] = (board == 0) # Empty spaces
-    return array.transpose((2, 0, 1))[np.newaxis, :]  # Add batch dimension
 
-def calculate_reward(board, action):
 
-    reward = 0  # Default reward
+# Function to check for a winning move
 
-    # Check if the action is valid and update the board
-    if np.sum(board) < HEIGHT * WIDTH and board[:, action].sum() == 0:
-        # Check if placing a disc prevents the opponent from connecting four
-        if is_blocking_opponent(board, action):
-            reward += 10  # Give a significant reward for blocking the opponent
+def check_win(board):
+    players, rows, cols = board.shape
 
-        # Check if placing a disc next to many of your own
-        adjacent_count = count_adjacent_discs(board, action)
-        reward += 0.1 * adjacent_count  # Increase reward based on the count
+    # Check for a win in rows
+    for player in range(players):
+        for row in range(rows):
+            for col in range(cols - 3):
+                if np.all(board[player, row, col:col + 4]==1):
+                    return True
 
-        # Check if the move leads to a win
-        # if is_winning_move(board, action):
-        #     reward += 100  # Give a high reward for winning the game
+    # Check for a win in columns
+    for player in range(players):
+        for col in range(cols):
+            for row in range(rows - 3):
+                if np.all(board[player, row:row + 4, col]==1):
+                    return True
 
-        # # Check for a row of 3
-        # if has_row_of_3(board, action):
-        #     reward += 5  # Give a moderate reward for a row of 3
+    # Check for a win in diagonals (from bottom-left to top-right)
+    for player in range(players):
+        for row in range(3, rows):
+            for col in range(cols - 3):
+                if np.all(board[player, row - np.arange(4), col + np.arange(4)]==1):
+                    return True
 
-        # # Check for a row of 2
-        # if has_row_of_2(board, action):
-        #     reward += 0.1  # Give a small reward for a row of 2
+    # Check for a win in diagonals (from top-left to bottom-right)
+    for player in range(players):
+        for row in range(rows - 3):
+            for col in range(cols - 3):
+                if np.all(board[player, row + np.arange(4), col + np.arange(4)]==1):
+                    return True
 
-        # Update the board
-        board[0, action] = 1
+    return False
 
-    # Check if the action is valid and update the board
-    if np.sum(board) < HEIGHT * WIDTH and board[:, action].sum() == 0:
-        # Check if placing a disc prevents the opponent from connecting four
-        if is_blocking_opponent(board, action):
-            reward += 10  # Give a significant reward for blocking the opponent
+def next_empty_row(board,action):
+    for row in range(HEIGHT):
+        if board[0,row,action]==0 and board[1,row,action]==0:
+            next = row
+            break
+        else:
+            continue
+    return next
 
-        # Check if placing a disc next to many of your own
-        adjacent_count = count_adjacent_discs(board, action)
-        reward += 0.1 * adjacent_count  # Increase reward based on the count
+# Function to calculate the reward
+def calculate_reward(board, action, current_player):
+    # Default reward
+    reward = 0
 
-        # Update the board
-        board[0, action] = 1
+    #create board where action was made
+    new_board= board.copy()
+    # Update the board
+    empty_row = next_empty_row(board,action)
+    new_board[0, empty_row, action] = 1
+
+    #check if board has free spaces (not necessary but doesnt hurt)
+    if np.sum(board) < HEIGHT * WIDTH:
+    # Check if the column is full
+        if np.sum(board[:, :, action]) == HEIGHT:
+            reward -= 10  # Give a penalty for placing a disc in a full column
+        else:
+            # Check if placing a disc prevents the opponent from connecting four
+            # if is_blocking_opponent(board, action):
+            #     reward += 10  # Give a significant reward for blocking the opponent
+
+            # Check if placing a disc next to many of your own
+            adjacent_count = count_adjacent_discs(board, action,empty_row)
+            reward += 0.1 * adjacent_count  # Increase reward based on the count
+
+            # Check if the move leads to a win
+            if check_win(new_board):
+                reward += 1000  # Give a high reward for winning the game
+
+            # Reward for a valid move
+            reward += 1  # Give a small reward for a valid move
+
+
+    else:
+        print("BOARD IS FULL!!")
 
     return reward
 
-def is_blocking_opponent(board, action):
-    # Check if placing a disc at the given action blocks the opponent from connecting four
-    temp_board = board.copy()
-    temp_board[0, action] = 1
+def is_blocking_opponent(board, action_column ):
+   
+    return False
 
-    # Iterate through possible 4-connect locations for the opponent
-    for i in range(WIDTH):
-        if temp_board[0, i] == 0 and np.sum(temp_board[:, i]) == HEIGHT - 1:
-            return True  # Blocking the opponent
+def count_adjacent_discs(board, action_column,action_row):
+    # check surrounings and count discs
+    count=0
+    #go around disc with catching errors
+    for row_offset in [-1,0,1]:
+        for column_offset in [-1,0,1]:
+            try:
+                if board[0,action_row+row_offset,action_column+column_offset]==1:
+                    count+=1
+            except:
+                pass
+    return count
 
-    return False  # Not blocking the opponent
-
-def count_adjacent_discs(board, action):
-    # Count the number of adjacent discs in the same row
-    adjacent_count = 0
-    for offset in [-1, 1]:
-        if 0 <= action + offset < WIDTH and board[0, action + offset] == 1:
-            adjacent_count += 1
-    return adjacent_count
-
-def training_opponent(opponent="rand",opponent_model=None):
-    if opponent=="rand":
-        action=np.random.randint(NUM_ACTIONS)
-
-    if opponent =="self":
-        pass
-        
+# Function to train the opponent
+def train_opponent(opponent, opponent_model,epsilon,state):
+    if opponent == "rand":
+        action = np.random.randint(NUM_ACTIONS)
+    elif opponent == "self":
+        #flip the current state so the opponent sees his situation on the top layer!!
+        #otherwise the rl opponent will predict action based on rl agents position
+        state_copy=state.copy()
+        state_copy=np.flip(state_copy,axis=1)
+        action = epsilon_greedy_action(state_copy, epsilon, opponent_model)
+    # Add more opponent strategies as needed
     return action
 
-def model_init():
-    train_from_start=False
+# Function to initialize the models
+def model_init(train_from_start):
     if train_from_start:
-        # Initialize DQN model and optimizer
         model = DQN(num_actions=NUM_ACTIONS)
         optimizer = tf.keras.optimizers.Adam(learning_rate=0.001)
-
-        # Initialize replay buffer
         replay_buffer = ReplayBuffer(capacity=10000)
-
-        # Training parameters
-        gamma = 0.99  # Discount factor
-        epsilon_start = 1.0  # Initial exploration rate
-        epsilon_end = 0.01  # Final exploration rate
-        epsilon_decay = 0.999  # Exploration rate decay
-        target_update_frequency = 10  # Update target network every N episodes
+        gamma = 0.99
+        epsilon_start = 1.0
+        epsilon_end = 0.01
+        epsilon_decay = 0.999
+        target_update_frequency = 10
         batch_size = 64
-
+        model.build((1, 2, HEIGHT, WIDTH))
         model.compile(optimizer='adam', loss='mse')
-    else: 
-        model = tf.keras.models.load_model(r"C:\Users\loren\Documents\AI_BME\FinalProject\connect4-reiforcement-learning\saved_model.tf")
-        gamma = 0.99  # Discount factor
-        epsilon_start = 1.0  # Initial exploration rate
-        epsilon_end = 0.01  # Final exploration rate
-        epsilon_decay = 0.999  # Exploration rate decay
-        target_update_frequency = 10  # Update target network every N episodes
+    else:
+        model = tf.keras.models.load_model("saved_model.tf")
+        gamma = 0.99
+        epsilon_start = 1.0
+        epsilon_end = 0.01
+        epsilon_decay = 0.999
+        target_update_frequency = 10
         batch_size = 64
-
-        # Initialize replay buffer
         replay_buffer = ReplayBuffer(capacity=10000)
-        
         optimizer = tf.keras.optimizers.Adam(learning_rate=0.001)
         model.compile(optimizer='adam', loss='mse')
-    ## init opponent model
+
+    # Inside model_init() function
     opponent_model = DQN(num_actions=NUM_ACTIONS)
+    opponent_model.build((1, 2, HEIGHT, WIDTH))  # Explicitly build the model with input shape
+    opponent_model.set_weights(model.get_weights())
 
-    # Training loop
-    num_episodes = 100
-    max_steps_per_episode = 40  # You can adjust this value
-    print("starting training")
+    return model, opponent_model, replay_buffer, optimizer, gamma, epsilon_start, epsilon_end, epsilon_decay, target_update_frequency, batch_size
+
+# Function to get RL action when playing game ->used in other code
+def get_rl_action(board, model):
+    state = board_to_numpy(board, 2)
+    q_values = model.predict(state)
+    return np.argmax(q_values)
+
+# Convert Connect 4 board to NumPy array and make input indifferent
+def board_to_numpy(board, current_player):
+    array = np.zeros((HEIGHT, WIDTH, 2), dtype=np.float32)
+    array[:, :, 0] = (board == current_player)  # Current player's discs
+    array[:, :, 1] = (board == 3 - current_player)  # Opponent's discs
+    return array.transpose((2, 0, 1))[np.newaxis, :]  # Add batch dimension
+
+if __name__ == "__main__":
+    train_from_start = False
+    model, opponent_model, replay_buffer, optimizer, gamma, epsilon_start, epsilon_end, epsilon_decay, target_update_frequency, batch_size = model_init(train_from_start)
+
+    num_episodes = 800
+    max_steps_per_episode = 42
+
     for episode in range(1, num_episodes + 1):
-        state = np.zeros((1, 3, HEIGHT, WIDTH), dtype=np.float32)  # Initial state
+        state = np.zeros((1, 2, HEIGHT, WIDTH), dtype=np.float32)
         done = False
-        step = 0  # Counter for steps in the episode
-        print(episode)
+        step = 0
+        epsilon = max(epsilon_end, epsilon_start * epsilon_decay ** episode)
+
         while not done and step < max_steps_per_episode:
-            epsilon = max(epsilon_end, epsilon_start * epsilon_decay ** episode)
-            action = epsilon_greedy_action(state, epsilon, model)
+            #check if board is full:
+            if not np.sum(state[0]) < HEIGHT * WIDTH:
+                print("EPISODE ENDED BY FULL BOARD")
+                break
 
-            # Simulate opponent's environment
-            opponent_action =  epsilon_greedy_action(state, epsilon, opponent_model)
+
+            #calculate opponennts move
+            opponent_action = train_opponent("self", opponent_model, epsilon,state)
+
+            if state[0, :, :, opponent_action].sum() <HEIGHT:
+                empty_row = next_empty_row(state[0],opponent_action)
+                state[0, 1, empty_row, opponent_action] = 1
+            else:
+                #opponent chose an illegal move -> picking free column instead
+                for column in range(WIDTH):
+                    if state[0, :, :, column].sum() <HEIGHT:
+                        opponent_action = column
+                        break
+                empty_row = next_empty_row(state[0],opponent_action)
+                state[0, 1, empty_row, opponent_action] = 1
+                    
+
+                
             
-            # Check if the opponent's action is valid and update the shared board
-            if np.sum(state[0, 1]) < HEIGHT * WIDTH and state[0, 1, :, opponent_action].sum() == 0:
-                state[0, 1, :, opponent_action] = 1
+            if check_win(state[0]):
+                print("EPISODE ENDED BY WIN OF OPPONENT")
+                print(state[0])
+                print("#"*30)
+                break
+            
+            #move of the RL agent
+            action = epsilon_greedy_action(state, epsilon, model)
+            #check if board or column is full
+            if state[0, :, :, action].sum() <HEIGHT:
+                reward = calculate_reward(state[0], action, current_player=1) #passing on without batch dimension
+                empty_row = next_empty_row(state[0],action)
+                next_state=state.copy()
+                next_state[0, 0, empty_row, action] = 1 # updation state, channel 0 is always for agent
+            else: #agent makes illegal move
+                reward = -10
+                next_state = state.copy()
+                replay_buffer.push(state, action, next_state, reward)
+                print("Episode ended by agent illegal move")
+                break
 
-            # Update the player's board based on their action
-            if np.sum(state[0, 0]) < HEIGHT * WIDTH and state[0, 0, :, action].sum() == 0:
-                reward = calculate_reward(state[0, 0], action)
-                state[0, 0, :, action] = 1
 
-            # Store the experience in the replay buffer
-            replay_buffer.push(state, action, state, reward)  # Use the same state for both player and opponent
+            replay_buffer.push(state, action, next_state, reward)
 
-            # Sample a random batch from the replay buffer and perform a Q-learning update
+            #set next state as state for next step of episode
+            state=next_state.copy()
+
             if len(replay_buffer.memory) > batch_size:
                 batch = replay_buffer.sample(batch_size)
                 states, actions, next_states, rewards = zip(*batch)
@@ -215,39 +303,38 @@ def model_init():
                     target_q_values = rewards + gamma * next_q_values
 
                     loss = tf.reduce_mean(tf.square(current_q_values - target_q_values))
+                    if episode % 20 == 0:
+                        print(loss)
 
                 gradients = tape.gradient(loss, model.trainable_variables)
                 optimizer.apply_gradients(zip(gradients, model.trainable_variables))
 
 
-                if episode % 10 == 0:
-                    # Update opponent model
-                    opponent_model.set_weights(model.get_weights())
+            
+            if check_win(next_state[0]):
+                print("EPISODE ENDED BY WIN OF AGENT")
+                print(state[0])
+                print("#"*30)
+                break
 
-            # Increment the step counter
+
             step += 1
+        
+                # Inside the training loop
+        if episode % target_update_frequency == 0:
+            model_weights = model.get_weights()
+            opponent_model_weights = opponent_model.get_weights()
+
+            # Print the shapes of the weights to identify any mismatches
+            for w1, w2 in zip(model_weights, opponent_model_weights):
+                pass
+                #print(w1.shape, w2.shape)
+
+            opponent_model.set_weights(model_weights)
 
 
-
-            # Print statistics
-            if episode % 10 == 0:
-                print(f"Episode: {episode}, Epsilon: {epsilon:.3f}")
+        if episode % 10 == 0:
+            print(f"Episode: {episode}, Epsilon: {epsilon:.3f}")
 
     print("Training complete.")
-    dummy_input = np.zeros((1, 3, HEIGHT, WIDTH), dtype=np.float32)
-    model(dummy_input)
-    model.save(r"C:\Users\loren\Documents\AI_BME\FinalProject\connect4-reiforcement-learning\saved_model.tf")
-
-    return model
-
-
-def get_rl_action(board,model):
-    state = board_to_numpy(board, 2)  # Assuming RL agent is player 2
-    q_values = model.predict(state)
-    return np.argmax(q_values)
-
-if __name__=="__main__":
-    model=model_init()
-
-
-
+    model.save("saved_model.tf")
