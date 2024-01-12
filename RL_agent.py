@@ -4,6 +4,8 @@ import random
 
 import os
 from datetime import datetime
+from tensorflow.keras.layers import Conv2D, Flatten, Dense, Concatenate
+
 
 # Set up TensorBoard writer
 log_parent_dir = (
@@ -53,33 +55,55 @@ STATE_SHAPE = (
     2,
     HEIGHT,
     WIDTH,
-)  # 3 channels for current player, opponent, and empty spaces
+)  # 2 channels for current player, opponent
 
 
 # Deep Q Network (DQN) Model
 class DQN(tf.keras.Model):
     def __init__(self, num_actions=WIDTH):
         super(DQN, self).__init__()
-        self.conv1 = tf.keras.layers.Conv2D(
+        # Layers for processing the game field
+        self.conv1 = Conv2D(
             32, (3, 3), strides=(1, 1), padding="same", activation="relu"
         )
-        self.conv2 = tf.keras.layers.Conv2D(
+        self.conv2 = Conv2D(
             64, (3, 3), strides=(1, 1), padding="same", activation="relu"
         )
-        self.conv3 = tf.keras.layers.Conv2D(
+        self.conv3 = Conv2D(
             64, (3, 3), strides=(1, 1), padding="same", activation="relu"
         )
-        self.flatten = tf.keras.layers.Flatten()
-        self.fc1 = tf.keras.layers.Dense(256, activation="relu")
-        self.fc2 = tf.keras.layers.Dense(num_actions)
+        self.flatten = Flatten()
 
-    def call(self, inputs):
-        x = self.conv1(inputs)
+        # Layers for processing flags
+        self.flag_fc = Dense(64, activation="relu")  # Adjust the size as needed
+        self.flag_output = Dense(1, activation="sigmoid")
+
+        # Common dense layers
+        self.fc1 = Dense(256, activation="relu")
+        self.fc2 = Dense(num_actions)
+
+    def call(self, inputs, training=None):
+        # Separate game field and flags
+        game_field = inputs[0]
+        flags = inputs[1]
+
+        # Process game field
+        x = self.conv1(game_field)
         x = self.conv2(x)
         x = self.conv3(x)
         x = self.flatten(x)
-        x = self.fc1(x)
-        return self.fc2(x)
+
+        # Process flags separately
+        flags_output = self.flag_fc(flags)
+        flags_output = self.flag_output(flags_output)
+
+        # Concatenate the processed game field and flags
+        x = tf.concat([x, flags_output], axis=-1)
+
+        # Common dense layers
+        output = self.fc2(x)
+        output.set_shape((None, NUM_ACTIONS))  # Adjust NUM_ACTIONS as needed
+        return output
 
     def set_custom_weights(self, weights):
         # Set custom weights for each layer
@@ -97,10 +121,31 @@ class ReplayBuffer:
         self.memory = []
         self.position = 0
 
-    def push(self, state, action, next_state, reward):
+    def push(
+        self,
+        state,
+        action,
+        next_state,
+        reward,
+        game_terminated_flag,
+        opponent_won_flag,
+        agent_won_flag,
+        illegal_agent_move_flag,
+        board_full_flag,
+    ):
         if len(self.memory) < self.capacity:
             self.memory.append(None)
-        self.memory[self.position] = (state, action, next_state, reward)
+        self.memory[self.position] = (
+            state,
+            action,
+            next_state,
+            reward,
+            game_terminated_flag,
+            opponent_won_flag,
+            agent_won_flag,
+            illegal_agent_move_flag,
+            board_full_flag,
+        )
         self.position = (self.position + 1) % self.capacity
 
     def sample(self, batch_size):
@@ -112,7 +157,7 @@ def epsilon_greedy_action(state, epsilon, model):
     if np.random.rand() < epsilon:
         return np.random.randint(NUM_ACTIONS)  # Explore
     else:
-        q_values = model.predict(state)
+        q_values = model.predict([state, np.expand_dims(np.zeros(5), axis=0)])
         return np.argmax(q_values)  # Exploit
 
 
@@ -239,10 +284,10 @@ def train_opponent(opponent, opponent_model, epsilon, state):
 # Function to initialize the models
 def model_init(train_from_start):
     learning_rate = 0.0005
-    gamma = 0.8
+    gamma = 0.9
     epsilon_start = 1.0
     epsilon_end = 0.01
-    epsilon_decay = 0.99
+    epsilon_decay = 0.9999
     target_update_frequency = 10
     batch_size = 64
     optimizer = tf.keras.optimizers.Adam(learning_rate)
@@ -250,18 +295,16 @@ def model_init(train_from_start):
 
     if train_from_start:
         model = DQN(num_actions=NUM_ACTIONS)
-        model.build((1, 2, HEIGHT, WIDTH))
+        model.build([(None, 2, HEIGHT, WIDTH), (None, 5)])
         model.compile(optimizer="adam", loss="mse")
     else:
-        model = tf.keras.models.load_model("saved_model.tf")
+        model = tf.keras.models.load_model("saved_model.tf", compile=True)
         model.compile(optimizer="adam", loss="mse")
+        model.build([(None, 2, HEIGHT, WIDTH), (None, 5)])
 
     # Inside model_init() function
     opponent_model = DQN(num_actions=NUM_ACTIONS)
-    opponent_model.build(
-        (1, 2, HEIGHT, WIDTH)
-    )  # Explicitly build the model with input shape
-    opponent_model.set_weights(model.get_weights())
+    opponent_model.build([(None, 2, HEIGHT, WIDTH), (None, 5)])
 
     return (
         model,
@@ -280,7 +323,9 @@ def model_init(train_from_start):
 # Function to get RL action when playing game ->used in other code
 def get_rl_action(board, model):
     state = board_to_numpy(board, 2)
-    q_values = model.predict(state)
+    q_values = model.predict(
+        [state, np.expand_dims(np.zeros(5), axis=0)]
+    )  # all the flags are 0
     return np.argmax(q_values)
 
 
@@ -316,11 +361,6 @@ if __name__ == "__main__":
         epsilon = max(epsilon_end, epsilon_start * epsilon_decay**episode)
 
         while not done and step < max_steps_per_episode:
-            # check if board is full:
-            if not np.sum(state[0]) < HEIGHT * WIDTH:
-                print("EPISODE ENDED BY FULL BOARD")
-                break
-
             # calculate opponennts move
             opponent_action = train_opponent("self", opponent_model, epsilon, state)
 
@@ -340,6 +380,20 @@ if __name__ == "__main__":
                 print("EPISODE ENDED BY WIN OF OPPONENT")
                 print(state[0])
                 print("#" * 30)
+                reward = -100
+                next_state = state.copy()
+                action = 1000
+                replay_buffer.push(
+                    state,
+                    action,
+                    next_state,
+                    reward,
+                    game_terminated_flag=1,
+                    opponent_won_flag=1,
+                    agent_won_flag=0,
+                    illegal_agent_move_flag=0,
+                    board_full_flag=0,
+                )
                 break
 
             # move of the RL agent
@@ -355,35 +409,127 @@ if __name__ == "__main__":
                     0, 0, empty_row, action
                 ] = 1  # updation state, channel 0 is always for agent
             else:  # agent makes illegal move
-                reward = -10
+                reward = -50
                 next_state = state.copy()
-                replay_buffer.push(state, action, next_state, reward)
+                replay_buffer.push(
+                    state,
+                    action,
+                    next_state,
+                    reward,
+                    game_terminated_flag=1,
+                    opponent_won_flag=0,
+                    agent_won_flag=0,
+                    illegal_agent_move_flag=1,
+                    board_full_flag=0,
+                )
                 print("Episode ended by agent illegal move")
                 break
 
-            replay_buffer.push(state, action, next_state, reward)
+            # check if board is full:
+            if not np.sum(state[0]) < HEIGHT * WIDTH:
+                print("EPISODE ENDED BY FULL BOARD")
+                reward = -5
+                replay_buffer.push(
+                    state,
+                    action,
+                    next_state,
+                    reward,
+                    game_terminated_flag=1,
+                    opponent_won_flag=0,
+                    agent_won_flag=0,
+                    illegal_agent_move_flag=0,
+                    board_full_flag=1,
+                )
+
+                break
+
+            if check_win(next_state[0]):
+                print("EPISODE ENDED BY WIN OF AGENT")
+                print(state[0])
+                print("#" * 30)
+                reward = 1000
+                replay_buffer.push(
+                    state,
+                    action,
+                    next_state,
+                    reward,
+                    game_terminated_flag=1,
+                    opponent_won_flag=0,
+                    agent_won_flag=1,
+                    illegal_agent_move_flag=0,
+                    board_full_flag=0,
+                )
+
+                break
+
+            replay_buffer.push(
+                state,
+                action,
+                next_state,
+                reward,
+                game_terminated_flag=0,
+                opponent_won_flag=0,
+                agent_won_flag=0,
+                illegal_agent_move_flag=0,
+                board_full_flag=0,
+            )
 
             # set next state as state for next step of episode
             state = next_state.copy()
 
             if len(replay_buffer.memory) > batch_size:
                 batch = replay_buffer.sample(batch_size)
-                states, actions, next_states, rewards = zip(*batch)
+                (
+                    states,
+                    actions,
+                    next_states,
+                    rewards,
+                    game_terminated_flags,
+                    opponent_won_flags,
+                    agent_won_flags,
+                    illegal_agent_move_flags,
+                    board_full_flags,
+                ) = zip(*batch)
 
                 states = np.concatenate(states)
                 actions = np.array(actions, dtype=np.int32).reshape(-1, 1)
                 next_states = np.concatenate(next_states)
                 rewards = np.array(rewards, dtype=np.float32).reshape(-1, 1)
+                game_terminated_flags = np.array(
+                    game_terminated_flags, dtype=np.float32
+                )
+                opponent_won_flags = np.array(opponent_won_flags, dtype=np.float32)
+                agent_won_flags = np.array(agent_won_flags, dtype=np.float32)
+                illegal_agent_move_flags = np.array(
+                    illegal_agent_move_flags, dtype=np.float32
+                )
+                board_full_flags = np.array(board_full_flags, dtype=np.float32)
 
                 with tf.GradientTape() as tape:
-                    current_q_values = model(states, training=True)
+                    flags = np.column_stack(
+                        [
+                            game_terminated_flags,
+                            opponent_won_flags,
+                            agent_won_flags,
+                            illegal_agent_move_flags,
+                            board_full_flags,
+                        ],
+                    )
+
+                    current_q_values = model(
+                        [states, flags],
+                        training=True,
+                    )
                     current_q_values = tf.reduce_sum(
                         tf.one_hot(actions, NUM_ACTIONS) * current_q_values,
                         axis=1,
                         keepdims=True,
                     )
 
-                    next_q_values = model(next_states, training=True)
+                    next_q_values = model(
+                        [next_states, flags],
+                        training=True,
+                    )
                     next_q_values = tf.reduce_max(next_q_values, axis=1, keepdims=True)
 
                     target_q_values = rewards + gamma * next_q_values
@@ -399,12 +545,6 @@ if __name__ == "__main__":
 
                 gradients = tape.gradient(loss, model.trainable_variables)
                 optimizer.apply_gradients(zip(gradients, model.trainable_variables))
-
-            if check_win(next_state[0]):
-                print("EPISODE ENDED BY WIN OF AGENT")
-                print(state[0])
-                print("#" * 30)
-                break
 
             step += 1
 
