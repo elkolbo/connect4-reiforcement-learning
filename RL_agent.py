@@ -445,7 +445,7 @@ if __name__ == "__main__":
 
             if check_win(next_state[0]):
                 print("EPISODE ENDED BY WIN OF AGENT")
-                print(state[0])
+                print(next_state[0])
                 print("#" * 30)
                 reward = 1000
                 replay_buffer.push(
@@ -544,7 +544,12 @@ if __name__ == "__main__":
                         tf.summary.scalar("Loss", loss.numpy(), step=episode)
 
                 gradients = tape.gradient(loss, model.trainable_variables)
-                optimizer.apply_gradients(zip(gradients, model.trainable_variables))
+                # Clip gradients to stabilize training
+                clipped_gradients, _ = tf.clip_by_global_norm(gradients, 4)
+
+                optimizer.apply_gradients(
+                    zip(clipped_gradients, model.trainable_variables)
+                )
 
             step += 1
 
