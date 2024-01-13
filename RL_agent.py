@@ -27,7 +27,7 @@ tensorboard_callback = tf.keras.callbacks.TensorBoard(
 
 # Initialize episode_losses list
 episode_losses = []
-num_episodes = 5000
+num_episodes = 100
 # print("starting tensorboard..")
 # # Run TensorBoard as a module
 # tensorboard_process = subprocess.Popen(
@@ -82,7 +82,7 @@ class DQN(tf.keras.Model):
         self.fc1 = Dense(256, activation="relu")
         self.fc2 = Dense(num_actions)
 
-    def call(self, inputs, training=None):
+    def call(self, inputs):
         # Separate game field and flags
         game_field = inputs[0]
         flags = inputs[1]
@@ -300,7 +300,7 @@ def model_init(train_from_start):
     else:
         model = tf.keras.models.load_model("saved_model.tf", compile=True)
         model.compile(optimizer="adam", loss="mse")
-        model.build([(None, 2, HEIGHT, WIDTH), (None, 5)])
+        # model.build([(None, 2, HEIGHT, WIDTH), (None, 5)])
 
     # Inside model_init() function
     opponent_model = DQN(num_actions=NUM_ACTIONS)
@@ -355,12 +355,14 @@ if __name__ == "__main__":
     max_steps_per_episode = 42
 
     for episode in range(1, num_episodes + 1):
+        print("New episode starting:")
+        print("*"*50)
         state = np.zeros((1, 2, HEIGHT, WIDTH), dtype=np.float32)
         done = False
         step = 0
         epsilon = max(epsilon_end, epsilon_start * epsilon_decay**episode)
-
-        while not done and step < max_steps_per_episode:
+        game_ended = False
+        while not done and step < max_steps_per_episode and not game_ended:
             # calculate opponennts move
             opponent_action = train_opponent("self", opponent_model, epsilon, state)
 
@@ -394,12 +396,13 @@ if __name__ == "__main__":
                     illegal_agent_move_flag=0,
                     board_full_flag=0,
                 )
-                break
+                game_ended = True
 
             # move of the RL agent
             action = epsilon_greedy_action(state, epsilon, model)
             # check if board or column is full
-            if state[0, :, :, action].sum() < HEIGHT:
+            if state[0, :, :, action].sum() < HEIGHT:  # agent makes legal move
+                # claculate next state and reward of this legal move
                 reward = calculate_reward(
                     state[0], action, current_player=1
                 )  # passing on without batch dimension
@@ -408,6 +411,59 @@ if __name__ == "__main__":
                 next_state[
                     0, 0, empty_row, action
                 ] = 1  # updation state, channel 0 is always for agent
+
+                # agent made legel move, now check the outcome of the move:
+
+                if (
+                    not np.sum(next_state[0]) < HEIGHT * WIDTH
+                ):  # check if board is full now
+                    print("EPISODE ENDED BY FULL BOARD")
+                    reward = -5
+                    replay_buffer.push(
+                        state,
+                        action,
+                        next_state,
+                        reward,
+                        game_terminated_flag=1,
+                        opponent_won_flag=0,
+                        agent_won_flag=0,
+                        illegal_agent_move_flag=0,
+                        board_full_flag=1,
+                    )
+
+                    game_ended = True
+                elif check_win(next_state[0]):  # agent won
+                    print("EPISODE ENDED BY WIN OF AGENT")
+                    print(next_state[0])
+                    print("#" * 30)
+                    reward = 1000
+                    replay_buffer.push(
+                        state,
+                        action,
+                        next_state,
+                        reward,
+                        game_terminated_flag=1,
+                        opponent_won_flag=0,
+                        agent_won_flag=1,
+                        illegal_agent_move_flag=0,
+                        board_full_flag=0,
+                    )
+
+                    game_ended = True
+
+                else:  # move was a "normal" game move, game continues
+                    replay_buffer.push(
+                        state,
+                        action,
+                        next_state,
+                        reward,
+                        game_terminated_flag=0,
+                        opponent_won_flag=0,
+                        agent_won_flag=0,
+                        illegal_agent_move_flag=0,
+                        board_full_flag=0,
+                    )
+
             else:  # agent makes illegal move
                 reward = -50
                 next_state = state.copy()
@@ -423,56 +479,7 @@ if __name__ == "__main__":
                     board_full_flag=0,
                 )
                 print("Episode ended by agent illegal move")
-                break
-
-            # check if board is full:
-            if not np.sum(state[0]) < HEIGHT * WIDTH:
-                print("EPISODE ENDED BY FULL BOARD")
-                reward = -5
-                replay_buffer.push(
-                    state,
-                    action,
-                    next_state,
-                    reward,
-                    game_terminated_flag=1,
-                    opponent_won_flag=0,
-                    agent_won_flag=0,
-                    illegal_agent_move_flag=0,
-                    board_full_flag=1,
-                )
-
-                break
-
-            if check_win(next_state[0]):
-                print("EPISODE ENDED BY WIN OF AGENT")
-                print(next_state[0])
-                print("#" * 30)
-                reward = 1000
-                replay_buffer.push(
-                    state,
-                    action,
-                    next_state,
-                    reward,
-                    game_terminated_flag=1,
-                    opponent_won_flag=0,
-                    agent_won_flag=1,
-                    illegal_agent_move_flag=0,
-                    board_full_flag=0,
-                )
-
-                break
-
-            replay_buffer.push(
-                state,
-                action,
-                next_state,
-                reward,
-                game_terminated_flag=0,
-                opponent_won_flag=0,
-                agent_won_flag=0,
-                illegal_agent_move_flag=0,
-                board_full_flag=0,
-            )
+                game_ended = True
 
             # set next state as state for next step of episode
             state = next_state.copy()
@@ -516,20 +523,14 @@ if __name__ == "__main__":
                         ],
                     )
 
-                    current_q_values = model(
-                        [states, flags],
-                        training=True,
-                    )
+                    current_q_values = model([states, flags])
                     current_q_values = tf.reduce_sum(
                         tf.one_hot(actions, NUM_ACTIONS) * current_q_values,
                         axis=1,
                         keepdims=True,
                     )
 
-                    next_q_values = model(
-                        [next_states, flags],
-                        training=True,
-                    )
+                    next_q_values = model([next_states, flags])
                     next_q_values = tf.reduce_max(next_q_values, axis=1, keepdims=True)
 
                     target_q_values = rewards + gamma * next_q_values
@@ -545,8 +546,16 @@ if __name__ == "__main__":
 
                 gradients = tape.gradient(loss, model.trainable_variables)
                 # Clip gradients to stabilize training
-                clipped_gradients, _ = tf.clip_by_global_norm(gradients, 4)
+                clipped_gradients, _ = tf.clip_by_global_norm(gradients, 2)
+                max_gradient = tf.reduce_max(
+                    [tf.reduce_max(grad) for grad in gradients]
+                )
+                max_clipped_gradient = tf.reduce_max(
+                    [tf.reduce_max(grad) for grad in clipped_gradients]
+                )
 
+                print(f"Unclipped garadients max:{max_gradient}")
+                print(f"Clipped garadients max:{max_clipped_gradient}")
                 optimizer.apply_gradients(
                     zip(clipped_gradients, model.trainable_variables)
                 )
