@@ -7,8 +7,11 @@ from RL_agent import get_rl_action, DQN
 # Constants
 WIDTH, HEIGHT = 7, 6
 CELL_SIZE = 100
-WINDOW_SIZE = (WIDTH * CELL_SIZE, (HEIGHT + 1) * CELL_SIZE)  # Extra row for displaying the current player
-FPS = 30 
+WINDOW_SIZE = (
+    WIDTH * CELL_SIZE,
+    (HEIGHT + 1) * CELL_SIZE,
+)  # Extra row for displaying the current player
+FPS = 30
 
 # Colors
 BACKGROUND_COLOR = (200, 200, 200)  # Neutral background color
@@ -24,19 +27,47 @@ RL_PLAYER = 2
 # Initialize pygame
 pygame.init()
 
+
 # Function to draw the Connect 4 board
 def draw_board(screen, board):
     for col in range(WIDTH):
         for row in range(HEIGHT):
-            pygame.draw.rect(screen, BACKGROUND_COLOR, (col * CELL_SIZE, (row + 1) * CELL_SIZE, CELL_SIZE, CELL_SIZE))
-            pygame.draw.circle(screen, GRID_COLOR, (col * CELL_SIZE + CELL_SIZE // 2, (row + 1) * CELL_SIZE + CELL_SIZE // 2),
-                               CELL_SIZE // 2, 5)  # Draw grid circles
+            pygame.draw.rect(
+                screen,
+                BACKGROUND_COLOR,
+                (col * CELL_SIZE, (row + 1) * CELL_SIZE, CELL_SIZE, CELL_SIZE),
+            )
+            pygame.draw.circle(
+                screen,
+                GRID_COLOR,
+                (
+                    col * CELL_SIZE + CELL_SIZE // 2,
+                    (row + 1) * CELL_SIZE + CELL_SIZE // 2,
+                ),
+                CELL_SIZE // 2,
+                5,
+            )  # Draw grid circles
             if board[row][col] == 1:
-                pygame.draw.circle(screen, RED, (col * CELL_SIZE + CELL_SIZE // 2, (row + 1) * CELL_SIZE + CELL_SIZE // 2),
-                                   CELL_SIZE // 2 - 5)
+                pygame.draw.circle(
+                    screen,
+                    RED,
+                    (
+                        col * CELL_SIZE + CELL_SIZE // 2,
+                        (row + 1) * CELL_SIZE + CELL_SIZE // 2,
+                    ),
+                    CELL_SIZE // 2 - 5,
+                )
             elif board[row][col] == 2:
-                pygame.draw.circle(screen, BLUE, (col * CELL_SIZE + CELL_SIZE // 2, (row + 1) * CELL_SIZE + CELL_SIZE // 2),
-                                   CELL_SIZE // 2 - 5)
+                pygame.draw.circle(
+                    screen,
+                    BLUE,
+                    (
+                        col * CELL_SIZE + CELL_SIZE // 2,
+                        (row + 1) * CELL_SIZE + CELL_SIZE // 2,
+                    ),
+                    CELL_SIZE // 2 - 5,
+                )
+
 
 # Function to drop a disc in a column
 def drop_disc(board, col, player):
@@ -45,6 +76,7 @@ def drop_disc(board, col, player):
             board[row][col] = player
             return True
     return False
+
 
 # Function to check for a win
 def check_win(board, player):
@@ -71,21 +103,24 @@ def check_win(board, player):
 
     return False
 
+
 # Function to check for a draw
 def check_draw(board):
     return all(board[0][col] != 0 for col in range(WIDTH))
+
 
 # Function to reset the game
 def reset_game():
     return [[0] * WIDTH for _ in range(HEIGHT)]
 
+
 # Main game loop
 def main():
     # If you want to play the game with a pre-trained model, uncomment the lines below
     model = DQN()
-    model = tf.keras.models.load_model(r"C:\Users\loren\Documents\AI_BME\FinalProject\connect4-reiforcement-learning\saved_model.tf")
+    model = tf.keras.models.load_model(r"saved_model.tf")
     screen = pygame.display.set_mode(WINDOW_SIZE)
-    pygame.display.set_caption('Connect 4')
+    pygame.display.set_caption("Connect 4")
 
     clock = pygame.time.Clock()
 
@@ -113,10 +148,10 @@ def main():
             # Add logic for RL agent's move
             if current_player == RL_PLAYER:
                 # Get the RL agent's action
-                rl_action = get_rl_action(board,model)
+                rl_action = get_rl_action(board, model)
                 print(rl_action)
                 # Update the board based on the RL agent's move
-                if drop_disc(board,rl_action , current_player):
+                if drop_disc(board, rl_action, current_player):
                     if check_win(board, current_player):
                         print(f"Player {current_player} wins!")
                         board = reset_game()
@@ -125,7 +160,9 @@ def main():
                         board = reset_game()
                     else:
                         current_player = 3 - current_player  # Switch players
-                elif drop_disc(board, random.randint(0, WIDTH-1) , current_player): ##make random action if agent finds no action
+                elif drop_disc(
+                    board, random.randint(0, WIDTH - 1), current_player
+                ):  ##make random action if agent finds no action
                     if check_win(board, current_player):
                         print(f"Player {current_player} wins!")
                         board = reset_game()
@@ -134,17 +171,21 @@ def main():
                         board = reset_game()
                     else:
                         current_player = 3 - current_player  # Switch players
-        
 
         screen.fill(BACKGROUND_COLOR)
         draw_board(screen, board)
 
         # Display current player
-        pygame.draw.circle(screen, RED if current_player == 1 else BLUE, (WIDTH * CELL_SIZE // 2, CELL_SIZE // 2),
-                           CELL_SIZE // 2 - 5)
+        pygame.draw.circle(
+            screen,
+            RED if current_player == 1 else BLUE,
+            (WIDTH * CELL_SIZE // 2, CELL_SIZE // 2),
+            CELL_SIZE // 2 - 5,
+        )
 
         pygame.display.flip()
         clock.tick(FPS)
+
 
 if __name__ == "__main__":
     main()
