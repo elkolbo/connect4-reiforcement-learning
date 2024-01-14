@@ -27,7 +27,7 @@ tensorboard_callback = tf.keras.callbacks.TensorBoard(
 
 # Initialize episode_losses list
 episode_losses = []
-num_episodes = 5000
+num_episodes = 1000
 # print("starting tensorboard..")
 # # Run TensorBoard as a module
 # tensorboard_process = subprocess.Popen(
@@ -157,7 +157,7 @@ def epsilon_greedy_action(state, epsilon, model):
     if np.random.rand() < epsilon:
         return np.random.randint(NUM_ACTIONS)  # Explore
     else:
-        q_values = model.predict([state, np.expand_dims(np.zeros(5), axis=0)])
+        q_values = model([state, np.expand_dims(np.zeros(5), axis=0)])
         return np.argmax(q_values)  # Exploit
 
 
@@ -285,7 +285,7 @@ def train_opponent(opponent, opponent_model, epsilon, state):
 def model_init(train_from_start):
     learning_rate = 0.0005
     gamma = 0.9
-    epsilon_start = 1.0
+    epsilon_start = 0.5
     epsilon_end = 0.01
     epsilon_decay = 0.9999
     target_update_frequency = 10
@@ -323,9 +323,9 @@ def model_init(train_from_start):
 # Function to get RL action when playing game ->used in other code
 def get_rl_action(board, model):
     state = board_to_numpy(board, 2)
-    q_values = model.predict(
+    q_values = model(
         [state, np.expand_dims(np.zeros(5), axis=0)]
-    )  # all the flags are 0
+    )  # all the flags are 0s
     return np.argmax(q_values)
 
 
@@ -338,7 +338,7 @@ def board_to_numpy(board, current_player):
 
 
 if __name__ == "__main__":
-    train_from_start = True
+    train_from_start = False
     (
         model,
         opponent_model,
