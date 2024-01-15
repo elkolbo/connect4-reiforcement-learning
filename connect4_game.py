@@ -118,7 +118,11 @@ def reset_game():
 def main():
     # If you want to play the game with a pre-trained model, uncomment the lines below
     model = DQN()
-    model = tf.keras.models.load_model(r"saved_model.tf")
+    model = DQN(num_actions=WIDTH)
+    model.build([(None, 2, HEIGHT, WIDTH), (None, 5)])
+    model.compile(optimizer="adam", loss="mse")
+
+    model.load_weights('./checkpoints/my_checkpoint')
     screen = pygame.display.set_mode(WINDOW_SIZE)
     pygame.display.set_caption("Connect 4")
 

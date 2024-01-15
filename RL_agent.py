@@ -1,16 +1,16 @@
 import tensorflow as tf
 import numpy as np
 import random
+import pathlib
 
 import os
 from datetime import datetime
 from tensorflow.keras.layers import Conv2D, Flatten, Dense, Concatenate
 
+path = pathlib.Path(__file__).parent / "logs"
 
 # Set up TensorBoard writer
-log_parent_dir = (
-    r"C:\Users\loren\Documents\AI_BME\FinalProject\connect4-reiforcement-learning\logs"
-)
+log_parent_dir = path
 current_time = datetime.now().strftime("%Y%m%d_%H%M%S")
 log_dir = os.path.join(log_parent_dir, current_time)
 
@@ -27,7 +27,7 @@ tensorboard_callback = tf.keras.callbacks.TensorBoard(
 
 # Initialize episode_losses list
 episode_losses = []
-num_episodes = 1000
+num_episodes = 250
 # print("starting tensorboard..")
 # # Run TensorBoard as a module
 # tensorboard_process = subprocess.Popen(
@@ -298,9 +298,11 @@ def model_init(train_from_start):
         model.build([(None, 2, HEIGHT, WIDTH), (None, 5)])
         model.compile(optimizer="adam", loss="mse")
     else:
-        model = tf.keras.models.load_model("saved_model.tf", compile=True)
+        model = DQN(num_actions=NUM_ACTIONS)
+        model.build([(None, 2, HEIGHT, WIDTH), (None, 5)])
         model.compile(optimizer="adam", loss="mse")
-        # model.build([(None, 2, HEIGHT, WIDTH), (None, 5)])
+
+        model.load_weights('./checkpoints/my_checkpoint')
 
     # Inside model_init() function
     opponent_model = DQN(num_actions=NUM_ACTIONS)
@@ -339,6 +341,7 @@ def board_to_numpy(board, current_player):
 
 if __name__ == "__main__":
     train_from_start = False
+
     (
         model,
         opponent_model,
@@ -580,7 +583,10 @@ if __name__ == "__main__":
             print(f"Episode: {episode}, Epsilon: {epsilon:.3f}")
 
     print("Training complete.")
-    model.save("saved_model.tf")
+
+    # Save the weights
+    model.save_weights('./checkpoints/my_checkpoint')
+
 
 # Close the writer
 summary_writer.close()
