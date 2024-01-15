@@ -548,6 +548,7 @@ if __name__ == "__main__":
                     # Log loss to TensorBoard
                     with summary_writer.as_default():
                         tf.summary.scalar("Loss", loss.numpy(), step=episode)
+                        tf.summary.scalar("Epsilon", epsilon, step=episode)
 
                 gradients = tape.gradient(loss, model.trainable_variables)
                 # Clip gradients to stabilize training
