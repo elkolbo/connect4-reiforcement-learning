@@ -27,7 +27,7 @@ tensorboard_callback = tf.keras.callbacks.TensorBoard(
 
 # Initialize episode_losses list
 episode_losses = []
-num_episodes = 250
+num_episodes = 10000
 # print("starting tensorboard..")
 # # Run TensorBoard as a module
 # tensorboard_process = subprocess.Popen(
