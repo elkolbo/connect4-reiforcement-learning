@@ -154,11 +154,13 @@ class ReplayBuffer:
 
 # Epsilon-Greedy Exploration
 def epsilon_greedy_action(state, epsilon, model):
+    q_values = model([state, np.expand_dims(np.zeros(5), axis=0)])
     if np.random.rand() < epsilon:
-        return np.random.randint(NUM_ACTIONS)  # Explore
+        random_move=True
+        return np.random.randint(NUM_ACTIONS),q_values,random_move  # Explore
     else:
-        q_values = model([state, np.expand_dims(np.zeros(5), axis=0)])
-        return np.argmax(q_values)  # Exploit
+        random_move=False
+        return np.argmax(q_values), q_values,random_move  # Exploit
 
 
 # Function to check for a winning move
@@ -276,7 +278,7 @@ def train_opponent(opponent, opponent_model, epsilon, state):
         # otherwise the rl opponent will predict action based on rl agents position
         state_copy = state.copy()
         state_copy = np.flip(state_copy, axis=1)
-        action = epsilon_greedy_action(state_copy, epsilon, opponent_model)
+        action, _,_ = epsilon_greedy_action(state_copy, epsilon, opponent_model)
     # Add more opponent strategies as needed
     return action
 
@@ -302,7 +304,7 @@ def model_init(train_from_start):
         model.build([(None, 2, HEIGHT, WIDTH), (None, 5)])
         model.compile(optimizer="adam", loss="mse")
 
-        model.load_weights('./checkpoints/my_checkpoint')
+        model.load_weights("./checkpoints/my_checkpoint")
 
     # Inside model_init() function
     opponent_model = DQN(num_actions=NUM_ACTIONS)
@@ -369,7 +371,7 @@ if __name__ == "__main__":
         game_ended = False
         while not done and step < max_steps_per_episode and not game_ended:
             # move of the RL agent
-            action = epsilon_greedy_action(state, epsilon, model)
+            action, q_values,random_move = epsilon_greedy_action(state, epsilon, model)
             # check if move is legal
             if (
                 state[0, :, :, action].sum() < HEIGHT and not game_ended
@@ -586,7 +588,7 @@ if __name__ == "__main__":
     print("Training complete.")
 
     # Save the weights
-    model.save_weights('./checkpoints/my_checkpoint')
+    model.save_weights("./checkpoints/my_checkpoint")
 
 
 # Close the writer
