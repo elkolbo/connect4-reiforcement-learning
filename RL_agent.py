@@ -29,7 +29,7 @@ tensorboard_callback = tf.keras.callbacks.TensorBoard(
 # Initialize episode_losses list
 episode_losses = []
 num_episodes = 10000
-visualization_frequency = 1
+visualization_frequency = 10000 # Put in a high value to train faster
 
 # visualization constants
 # Constants
@@ -292,6 +292,24 @@ def check_win(board):
     return False
 
 
+def is_blocking_opponent(board, action_column):
+    # Copy the board to simulate the effect of placing a disc in the specified column
+    temp_board = np.copy(board)
+
+    # Find the empty row in the specified column
+    empty_row = next_empty_row(temp_board, action_column)
+
+    if empty_row is None:
+        # The column is full, and placing a disc is not possible
+        return False
+
+    # Place a disc in the specified column
+    temp_board[0, empty_row, action_column] = 1
+
+    # Check if this move blocks the opponent from connecting four discs
+    return not check_win(temp_board)
+
+
 def next_empty_row(board, action):
     try:
         for row in range(HEIGHT):
@@ -310,15 +328,15 @@ def calculate_reward(board, action, current_player):
     # Default reward
     reward = 0
 
-    # check if board has free spaces (not necessary but doesnt hurt)
+    # check if board has free spaces (not necessary but doesn't hurt)
     if np.sum(board) < HEIGHT * WIDTH:
         # Check if the column is full
         if np.sum(board[:, :, action]) == HEIGHT:
             reward -= 10  # Give a penalty for placing a disc in a full column
         else:
             # Check if placing a disc prevents the opponent from connecting four
-            # if is_blocking_opponent(board, action):
-            #     reward += 10  # Give a significant reward for blocking the opponent
+            if is_blocking_opponent(board, action):
+                reward += 10  # Give a significant reward for blocking the opponent
 
             # Check if placing a disc next to many of your own
             adjacent_count = count_adjacent_discs(board, action, empty_row)
@@ -333,8 +351,8 @@ def calculate_reward(board, action, current_player):
     return reward
 
 
-def is_blocking_opponent(board, action_column):
-    return False
+# def is_blocking_opponent(board, action_column):
+#     return False
 
 
 def count_adjacent_discs(board, action_column, action_row):
@@ -472,6 +490,7 @@ if __name__ == "__main__":
         step = 0
         epsilon = max(epsilon_end, epsilon_start * epsilon_decay**episode)
         game_ended = False
+        next_state_opponent = np.zeros((1, 2, HEIGHT, WIDTH), dtype=np.float32) # MoNew
         pygame.event.pump()
         while not done and step < max_steps_per_episode and not game_ended:
             # move of the RL agent
@@ -487,6 +506,7 @@ if __name__ == "__main__":
                 next_state[
                     0, 0, empty_row, action
                 ] = 1  # updation state, channel 0 is always for agent
+                next_state_opponent = next_state.copy()
                 reward = calculate_reward(next_state[0], action, current_player=1)
                 # agent made legal move, now check the outcome of the move:
 
@@ -510,6 +530,9 @@ if __name__ == "__main__":
                     game_ended = True
 
                 else:  # move was a "normal" game move, game continues
+                    if is_blocking_opponent(next_state_opponent[0], action):
+                        # Reward for blocking the opponent
+                        reward += 20
                     # calculate opponennts move
                     opponent_action = train_opponent(
                         "self", opponent_model, epsilon, next_state
