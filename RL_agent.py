@@ -2,6 +2,7 @@ import tensorflow as tf
 import numpy as np
 import random
 import pathlib
+import pygame
 
 import os
 from datetime import datetime
@@ -28,28 +29,119 @@ tensorboard_callback = tf.keras.callbacks.TensorBoard(
 # Initialize episode_losses list
 episode_losses = []
 num_episodes = 10000
-# print("starting tensorboard..")
-# # Run TensorBoard as a module
-# tensorboard_process = subprocess.Popen(
-#     [
-#         r"C:\Users\loren\anaconda3\envs\AIBME\Scripts\tensorboard.exe",
-#         "--logdir",
-#         log_dir,
-#     ],
-#     stdout=subprocess.PIPE,
-#     stderr=subprocess.PIPE,
-#     text=True,
-# )
-# time.sleep(2)  # Add a 2-second delay
+visualization_frequency = 10
 
-# # Print the output
-# stdout, stderr = tensorboard_process.communicate()
-# print(stdout)
-# print(stderr)
-
-print("tensorboard started")
+# visualization constants
 # Constants
 WIDTH, HEIGHT = 7, 6
+CELL_SIZE = 100
+WINDOW_WIDTH, WINDOW_HEIGHT = WIDTH * CELL_SIZE, (HEIGHT + 2.5) * CELL_SIZE
+
+FPS = 30
+
+BACKGROUND_COLOR = (25, 25, 25)  # Dark background color
+GRID_COLOR = (100, 100, 100)  # Grid color
+RED = (255, 0, 0)
+YELLOW = (255, 255, 0)
+BLUE = (0, 0, 255)
+
+# intit pygame to visualize
+pygame.init()
+
+screen = pygame.display.set_mode(
+    (WINDOW_WIDTH, WINDOW_HEIGHT)
+)  # Angepasste Fenstergröße
+pygame.display.set_caption("Connect 4")
+
+clock = pygame.time.Clock()
+
+
+def draw_board(screen, board):
+    for col in range(WIDTH):
+        for row in range(HEIGHT):
+            pygame.draw.rect(
+                screen,
+                BACKGROUND_COLOR,
+                (
+                    col * CELL_SIZE,
+                    (row + 1.5) * CELL_SIZE,
+                    CELL_SIZE,
+                    CELL_SIZE,
+                ),  # Angepasste Y-Koordinate
+            )
+            pygame.draw.circle(
+                screen,
+                GRID_COLOR,
+                (
+                    col * CELL_SIZE + CELL_SIZE // 2,
+                    (row + 1.5) * CELL_SIZE + CELL_SIZE // 2,  # Angepasste Y-Koordinate
+                ),
+                CELL_SIZE // 2,
+                5,
+            )  # Draw grid circles
+            if board[0][row][col] == 1:
+                pygame.draw.circle(
+                    screen,
+                    RED,
+                    (
+                        col * CELL_SIZE + CELL_SIZE // 2,
+                        (row + 1.5) * CELL_SIZE
+                        + CELL_SIZE // 2,  # Angepasste Y-Koordinate
+                    ),
+                    CELL_SIZE // 2 - 5,
+                )
+            elif board[1][row][col] == 1:
+                pygame.draw.circle(
+                    screen,
+                    BLUE,
+                    (
+                        col * CELL_SIZE + CELL_SIZE // 2,
+                        (row + 1.5) * CELL_SIZE
+                        + CELL_SIZE // 2,  # Angepasste Y-Koordinate
+                    ),
+                    CELL_SIZE // 2 - 5,
+                )
+
+
+def visualize_training(screen, q_values, random_action, action, reward):
+    q_values = q_values[0]
+    for col, value in enumerate(q_values):
+        # Draw the bar for each column
+        if value.numpy() == np.max(q_values.numpy()):
+            color = (255, 0, 0)
+        else:
+            color = (10, 10, 255)
+        pygame.draw.rect(
+            screen,
+            color,
+            (
+                col * CELL_SIZE + 0.25 * CELL_SIZE,
+                WINDOW_HEIGHT - int(value.numpy() * 200),
+                CELL_SIZE * 0.5,
+                int(value.numpy() * 200),
+            ),
+        )
+
+        # Display Q-values on the bars with 1 digit after the comma
+        font_q_values = pygame.font.Font(None, 20)
+        q_value_text = font_q_values.render(f"{value:.3f}", True, (255, 0, 0))
+        screen.blit(q_value_text, (col * CELL_SIZE, WINDOW_HEIGHT - 20))
+    # display reward of state
+    font_reward = pygame.font.Font(None, 36)
+    reward_text = font_reward.render(f"Reward:{reward:.3f}", True, (255, 255, 255))
+    screen.blit(reward_text, (screen.get_width() - reward_text.get_width(), 40))
+
+    # Display information about the chosen action in the top right corner
+    font_action = pygame.font.Font(None, 36)
+    action_text = font_action.render(
+        f"Chosen Action: {action}{' (Random)' if random_action else ''}",
+        True,
+        (255, 255, 255),
+    )
+    screen.blit(action_text, (screen.get_width() - action_text.get_width(), 0))
+
+
+# Constants
 NUM_ACTIONS = WIDTH
 STATE_SHAPE = (
     2,
@@ -156,11 +248,11 @@ class ReplayBuffer:
 def epsilon_greedy_action(state, epsilon, model):
     q_values = model([state, np.expand_dims(np.zeros(5), axis=0)])
     if np.random.rand() < epsilon:
-        random_move=True
-        return np.random.randint(NUM_ACTIONS),q_values,random_move  # Explore
+        random_move = True
+        return np.random.randint(NUM_ACTIONS), q_values, random_move  # Explore
     else:
-        random_move=False
-        return np.argmax(q_values), q_values,random_move  # Exploit
+        random_move = False
+        return np.argmax(q_values), q_values, random_move  # Exploit
 
 
 # Function to check for a winning move
@@ -278,7 +370,7 @@ def train_opponent(opponent, opponent_model, epsilon, state):
         # otherwise the rl opponent will predict action based on rl agents position
         state_copy = state.copy()
         state_copy = np.flip(state_copy, axis=1)
-        action, _,_ = epsilon_greedy_action(state_copy, epsilon, opponent_model)
+        action, _, _ = epsilon_greedy_action(state_copy, epsilon, opponent_model)
     # Add more opponent strategies as needed
     return action
 
@@ -287,8 +379,8 @@ def train_opponent(opponent, opponent_model, epsilon, state):
 def model_init(train_from_start):
     learning_rate = 0.0005
     gamma = 0.9
-    epsilon_start = 0.5
-    epsilon_end = 0.01
+    epsilon_start = 0.0
+    epsilon_end = 0.0
     epsilon_decay = 0.9999
     target_update_frequency = 10
     batch_size = 64
@@ -341,6 +433,24 @@ def board_to_numpy(board, current_player):
     return array.transpose((2, 0, 1))[np.newaxis, :]  # Add batch dimension
 
 
+def numpy_to_board(array, current_player):
+    # Transpose back to the original shape
+    array = array.transpose((1, 0, 2))
+
+    # Extract current player's discs and opponent's discs
+    current_player_discs = np.where(array[:, :, 0] == 1)
+    opponent_discs = np.where(array[:, :, 0] == 0)
+
+    # Create an empty board
+    board = np.zeros((HEIGHT, WIDTH))
+
+    # Fill in the board with player and opponent discs
+    board[current_player_discs[0], current_player_discs[1]] = current_player
+    board[opponent_discs[0], opponent_discs[1]] = 3 - current_player
+
+    return board
+
+
 if __name__ == "__main__":
     train_from_start = False
 
@@ -369,9 +479,10 @@ if __name__ == "__main__":
         step = 0
         epsilon = max(epsilon_end, epsilon_start * epsilon_decay**episode)
         game_ended = False
+        pygame.event.pump()
         while not done and step < max_steps_per_episode and not game_ended:
             # move of the RL agent
-            action, q_values,random_move = epsilon_greedy_action(state, epsilon, model)
+            action, q_values, random_move = epsilon_greedy_action(state, epsilon, model)
             # check if move is legal
             if (
                 state[0, :, :, action].sum() < HEIGHT and not game_ended
@@ -455,7 +566,7 @@ if __name__ == "__main__":
 
                 # calculate opponennts move
             opponent_action = train_opponent(
-                "self", opponent_model, epsilon, next_state
+                "rand", opponent_model, epsilon, next_state
             )
 
             if next_state[0, :, :, opponent_action].sum() < HEIGHT:
@@ -569,6 +680,15 @@ if __name__ == "__main__":
                 )
 
             step += 1
+
+            if episode % visualization_frequency == 0:
+                screen.fill(BACKGROUND_COLOR)  # Clear the screen
+                draw_board(screen, state[0])
+                visualize_training(screen, q_values, random_move, action, reward)
+                pygame.display.flip()
+                pygame.display.update()  # forced display update
+                pygame.time.wait(2000)
+                # wait for a bit to make it easier to follow visualization
 
             # Inside the training loop
         if episode % target_update_frequency == 0:
