@@ -29,7 +29,7 @@ tensorboard_callback = tf.keras.callbacks.TensorBoard(
 # Initialize episode_losses list
 episode_losses = []
 num_episodes = 10000
-visualization_frequency = 10000 # Put in a high value to train faster
+visualization_frequency = 10000  # Put in a high value to train faster
 
 # visualization constants
 # Constants
@@ -332,7 +332,9 @@ def calculate_reward(board, action, current_player):
     if np.sum(board) < HEIGHT * WIDTH:
         # Check if the column is full
         if np.sum(board[:, :, action]) == HEIGHT:
-            reward -= 10  # Give a penalty for placing a disc in a full column
+            pass
+            # this is no longer needed
+            # reward -= 10  # Give a penalty for placing a disc in a full column
         else:
             # Check if placing a disc prevents the opponent from connecting four
             if is_blocking_opponent(board, action):
@@ -490,7 +492,7 @@ if __name__ == "__main__":
         step = 0
         epsilon = max(epsilon_end, epsilon_start * epsilon_decay**episode)
         game_ended = False
-        next_state_opponent = np.zeros((1, 2, HEIGHT, WIDTH), dtype=np.float32) # MoNew
+        next_state_opponent = np.zeros((1, 2, HEIGHT, WIDTH), dtype=np.float32)  # MoNew
         pygame.event.pump()
         while not done and step < max_steps_per_episode and not game_ended:
             # move of the RL agent
