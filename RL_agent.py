@@ -563,41 +563,41 @@ if __name__ == "__main__":
                 )
                 print("Episode ended by agent illegal move")
                 game_ended = True
-
+            if not game_ended:  # only make opponent move if game has not yet ended
                 # calculate opponennts move
-            opponent_action = train_opponent(
-                "rand", opponent_model, epsilon, next_state
-            )
-
-            if next_state[0, :, :, opponent_action].sum() < HEIGHT:
-                empty_row = next_empty_row(next_state[0], opponent_action)
-                next_state[0, 1, empty_row, opponent_action] = 1
-            else:
-                # opponent chose an illegal move -> picking free column instead
-                for column in range(WIDTH):
-                    if next_state[0, :, :, column].sum() < HEIGHT:
-                        opponent_action = column
-                        break
-                empty_row = next_empty_row(next_state[0], opponent_action)
-                next_state[0, 1, empty_row, opponent_action] = 1
-
-            if check_win(state[0]):
-                print("EPISODE ENDED BY WIN OF OPPONENT")
-                print(state[0])
-                print("#" * 30)
-                reward = -100
-                replay_buffer.push(
-                    state,
-                    action,
-                    next_state,
-                    reward,
-                    game_terminated_flag=1,
-                    opponent_won_flag=1,
-                    agent_won_flag=0,
-                    illegal_agent_move_flag=0,
-                    board_full_flag=0,
+                opponent_action = train_opponent(
+                    "self", opponent_model, epsilon, next_state
                 )
-                game_ended = True
+                # opponent can be "rand" or "self"
+                if next_state[0, :, :, opponent_action].sum() < HEIGHT:
+                    empty_row = next_empty_row(next_state[0], opponent_action)
+                    next_state[0, 1, empty_row, opponent_action] = 1
+                else:
+                    # opponent chose an illegal move -> picking free column instead
+                    for column in range(WIDTH):
+                        if next_state[0, :, :, column].sum() < HEIGHT:
+                            opponent_action = column
+                            break
+                    empty_row = next_empty_row(next_state[0], opponent_action)
+                    next_state[0, 1, empty_row, opponent_action] = 1
+
+                if check_win(state[0]):
+                    print("EPISODE ENDED BY WIN OF OPPONENT")
+                    print(state[0])
+                    print("#" * 30)
+                    reward = -100
+                    replay_buffer.push(
+                        state,
+                        action,
+                        next_state,
+                        reward,
+                        game_terminated_flag=1,
+                        opponent_won_flag=1,
+                        agent_won_flag=0,
+                        illegal_agent_move_flag=0,
+                        board_full_flag=0,
+                    )
+                    game_ended = True
 
             # set next state as state for next step of episode
             state = next_state.copy()
