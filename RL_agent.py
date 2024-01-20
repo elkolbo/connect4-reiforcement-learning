@@ -29,7 +29,7 @@ tensorboard_callback = tf.keras.callbacks.TensorBoard(
 # Initialize episode_losses list
 episode_losses = []
 num_episodes = 10000
-visualization_frequency = 10
+visualization_frequency = 1
 
 # visualization constants
 # Constants
@@ -124,7 +124,7 @@ def visualize_training(screen, q_values, random_action, action, reward):
 
         # Display Q-values on the bars with 1 digit after the comma
         font_q_values = pygame.font.Font(None, 20)
-        q_value_text = font_q_values.render(f"{value:.3f}", True, (255, 0, 0))
+        q_value_text = font_q_values.render(f"{value:.3f}", True, (255, 255, 255))
         screen.blit(q_value_text, (col * CELL_SIZE, WINDOW_HEIGHT - 20))
     # display reward of state
     font_reward = pygame.font.Font(None, 36)
@@ -293,25 +293,22 @@ def check_win(board):
 
 
 def next_empty_row(board, action):
-    for row in range(HEIGHT):
-        if board[0, row, action] == 0 and board[1, row, action] == 0:
-            next = row
-            break
-        else:
-            continue
-    return next
+    try:
+        for row in range(HEIGHT):
+            if board[0, row, action] == 0 and board[1, row, action] == 0:
+                next = row
+                break
+            else:
+                continue
+        return next
+    except:
+        pass
 
 
 # Function to calculate the reward
 def calculate_reward(board, action, current_player):
     # Default reward
     reward = 0
-
-    # create board where action was made
-    new_board = board.copy()
-    # Update the board
-    empty_row = next_empty_row(board, action)
-    new_board[0, empty_row, action] = 1
 
     # check if board has free spaces (not necessary but doesnt hurt)
     if np.sum(board) < HEIGHT * WIDTH:
@@ -326,10 +323,6 @@ def calculate_reward(board, action, current_player):
             # Check if placing a disc next to many of your own
             adjacent_count = count_adjacent_discs(board, action, empty_row)
             reward += 0.1 * adjacent_count  # Increase reward based on the count
-
-            # Check if the move leads to a win
-            if check_win(new_board):
-                reward += 1000  # Give a high reward for winning the game
 
             # Reward for a valid move
             reward += 1  # Give a small reward for a valid move
@@ -488,15 +481,13 @@ if __name__ == "__main__":
                 state[0, :, :, action].sum() < HEIGHT and not game_ended
             ):  # agent makes legal move and game has not ended
                 # calculate next state and reward of this legal move
-                reward = calculate_reward(
-                    state[0], action, current_player=1
-                )  # passing on without batch dimension
+                # passing on without batch dimension
                 empty_row = next_empty_row(state[0], action)
                 next_state = state.copy()
                 next_state[
                     0, 0, empty_row, action
                 ] = 1  # updation state, channel 0 is always for agent
-
+                reward = calculate_reward(next_state[0], action, current_player=1)
                 # agent made legal move, now check the outcome of the move:
 
                 if check_win(next_state[0]):  # agent won
@@ -519,17 +510,57 @@ if __name__ == "__main__":
                     game_ended = True
 
                 else:  # move was a "normal" game move, game continues
-                    replay_buffer.push(
-                        state,
-                        action,
-                        next_state,
-                        reward,
-                        game_terminated_flag=0,
-                        opponent_won_flag=0,
-                        agent_won_flag=0,
-                        illegal_agent_move_flag=0,
-                        board_full_flag=0,
+                    # calculate opponennts move
+                    opponent_action = train_opponent(
+                        "self", opponent_model, epsilon, next_state
                     )
+                    next_state_opponent = next_state.copy()
+                    # opponent can be "rand" or "self"
+                    if next_state[0, :, :, opponent_action].sum() < HEIGHT:
+                        empty_row = next_empty_row(next_state[0], opponent_action)
+                        next_state_opponent[0, 1, empty_row, opponent_action] = 1
+                    else:
+                        # opponent chose an illegal move -> picking free column instead
+                        for column in range(WIDTH):
+                            if next_state[0, :, :, column].sum() < HEIGHT:
+                                opponent_action = column
+                                break
+                        empty_row = next_empty_row(next_state[0], opponent_action)
+                        next_state_opponent[0, 1, empty_row, opponent_action] = 1
+
+                    if check_win(next_state_opponent[0]):  # opponent won
+                        print("EPISODE ENDED BY WIN OF OPPONENT")
+                        print(next_state_opponent[0])
+                        print("#" * 30)
+                        reward = -100
+                        replay_buffer.push(
+                            state,
+                            action,
+                            next_state,
+                            reward,
+                            game_terminated_flag=1,
+                            opponent_won_flag=1,
+                            agent_won_flag=0,
+                            illegal_agent_move_flag=0,
+                            board_full_flag=0,
+                        )
+                        game_ended = True
+
+                    else:  # opponent didn't win
+                        replay_buffer.push(
+                            state,
+                            action,
+                            next_state,
+                            reward,
+                            game_terminated_flag=0,
+                            opponent_won_flag=0,
+                            agent_won_flag=0,
+                            illegal_agent_move_flag=0,
+                            board_full_flag=0,
+                        )
+                    next_state = (
+                        next_state_opponent.copy()
+                    )  # copy for correct continuation in next episode
             elif (
                 not np.sum(next_state[0]) < HEIGHT * WIDTH and not game_ended
             ):  # check if board is full --> reason for illegal move
@@ -547,7 +578,7 @@ if __name__ == "__main__":
                     board_full_flag=1,
                 )
                 game_ended = True
-            elif not game_ended:  # agent makes illegal move and opponent hasn't won
+            elif not game_ended:  # agent makes illegal move
                 reward = -50
                 next_state = state.copy()
                 replay_buffer.push(
@@ -563,41 +594,6 @@ if __name__ == "__main__":
                 )
                 print("Episode ended by agent illegal move")
                 game_ended = True
-            if not game_ended:  # only make opponent move if game has not yet ended
-                # calculate opponennts move
-                opponent_action = train_opponent(
-                    "self", opponent_model, epsilon, next_state
-                )
-                # opponent can be "rand" or "self"
-                if next_state[0, :, :, opponent_action].sum() < HEIGHT:
-                    empty_row = next_empty_row(next_state[0], opponent_action)
-                    next_state[0, 1, empty_row, opponent_action] = 1
-                else:
-                    # opponent chose an illegal move -> picking free column instead
-                    for column in range(WIDTH):
-                        if next_state[0, :, :, column].sum() < HEIGHT:
-                            opponent_action = column
-                            break
-                    empty_row = next_empty_row(next_state[0], opponent_action)
-                    next_state[0, 1, empty_row, opponent_action] = 1
-
-                if check_win(state[0]):
-                    print("EPISODE ENDED BY WIN OF OPPONENT")
-                    print(state[0])
-                    print("#" * 30)
-                    reward = -100
-                    replay_buffer.push(
-                        state,
-                        action,
-                        next_state,
-                        reward,
-                        game_terminated_flag=1,
-                        opponent_won_flag=1,
-                        agent_won_flag=0,
-                        illegal_agent_move_flag=0,
-                        board_full_flag=0,
-                    )
-                    game_ended = True
 
             # set next state as state for next step of episode
             state = next_state.copy()
