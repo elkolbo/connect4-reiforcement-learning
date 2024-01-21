@@ -7,6 +7,8 @@ from game_functions import *
 from config import config
 
 
+config_values = config()
+
 # Function to draw the Connect 4 board
 def draw_board(screen, board):
     # Draw a stylish frame around the entire window
