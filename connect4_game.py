@@ -48,12 +48,14 @@ def main():
                     if drop_disc(board, column, current_player):
                         if check_win(board, current_player):
                             your_wins += 1
+                            draw_board(screen, board)
                             end_screen(
                                 "You Win!", screen, your_wins, rl_agent_wins, draws
                             )
                             board = reset_game()
                         elif check_draw(board):
                             draws += 1
+                            draw_board(screen, board)
                             end_screen(
                                 "It's a Draw!", screen, your_wins, rl_agent_wins, draws
                             )
@@ -69,12 +71,14 @@ def main():
                 if drop_disc(board, rl_action, current_player):
                     if check_win(board, current_player):
                         rl_agent_wins += 1
+                        draw_board(screen, board)
                         end_screen(
                             "RL-Agent Wins!", screen, your_wins, rl_agent_wins, draws
                         )
                         board = reset_game()
                     elif check_draw(board):
                         draws += 1
+                        draw_board(screen, board)
                         end_screen(
                             "It's a Draw!", screen, your_wins, rl_agent_wins, draws
                         )
@@ -86,12 +90,14 @@ def main():
                 ):  # Make random action if agent finds no action
                     if check_win(board, current_player):
                         rl_agent_wins += 1
+                        draw_board(screen, board)
                         end_screen(
                             "RL-Agent Wins!", screen, your_wins, rl_agent_wins, draws
                         )
                         board = reset_game()
                     elif check_draw(board):
                         draws += 1
+                        draw_board(screen, board)
                         end_screen(
                             "It's a Draw!", screen, your_wins, rl_agent_wins, draws
                         )
@@ -100,6 +106,8 @@ def main():
                         current_player = 3 - current_player  # Switch players
 
         screen.fill(cf.BACKGROUND_COLOR)
+        # frame_rect = pygame.Rect(0, 0, cf.WINDOW_WIDTH, cf.WINDOW_HEIGHT)
+        # pygame.draw.rect(screen, cf.GRID_COLOR, frame_rect, border_radius=10)
         draw_board(screen, board)
 
         # Display current player
@@ -117,7 +125,7 @@ def main():
         stats_background_rect = pygame.Rect(
             0, cf.WINDOW_HEIGHT - stats_height, cf.WINDOW_WIDTH, stats_height
         )
-        pygame.draw.rect(screen, cf.BACKGROUND_COLOR, stats_background_rect)
+        pygame.draw.rect(screen, cf.GRID_COLOR, stats_background_rect)
 
         # Display game statistics
         font_stats = pygame.font.Font(None, 36)

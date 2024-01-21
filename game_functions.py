@@ -11,8 +11,6 @@ cf = config() # config values
 
 # Function to draw the Connect 4 board
 def draw_board(screen, board):
-    frame_rect = pygame.Rect(0, 0, cf.WINDOW_WIDTH, cf.WINDOW_HEIGHT)
-    pygame.draw.rect(screen, cf.GRID_COLOR, frame_rect, border_radius=10)
 
     # Draw the Connect 4 board inside the background frame
     board_rect = pygame.Rect(
