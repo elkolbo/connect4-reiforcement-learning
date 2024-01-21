@@ -29,7 +29,7 @@ tensorboard_callback = tf.keras.callbacks.TensorBoard(
 # Initialize episode_losses list
 episode_losses = []
 num_episodes = 50
-visualization_frequency = 10000  # Put in a high value to train faster
+visualization_frequency = 1  # Put in a high value to train faster
 
 # visualization constants
 # Constants
@@ -103,7 +103,7 @@ def draw_board(screen, board):
                 )
 
 
-def visualize_training(screen, q_values, random_action, action, reward):
+def visualize_training(screen, q_values, random_action, action, reward, opponent):
     q_values = q_values[0]
     for col, value in enumerate(q_values):
         # Draw the bar for each column
@@ -139,6 +139,15 @@ def visualize_training(screen, q_values, random_action, action, reward):
         (255, 255, 255),
     )
     screen.blit(action_text, (screen.get_width() - action_text.get_width(), 0))
+
+    # Display which opponent
+    font_action = pygame.font.Font(None, 36)
+    opponent_text = font_action.render(
+        f"Opponent: " + opponent,
+        True,
+        (255, 255, 255),
+    )
+    screen.blit(opponent_text, (screen.get_width() - opponent_text.get_width(), 80))
 
 
 # Constants
@@ -466,6 +475,17 @@ def numpy_to_board(array, current_player):
     return board
 
 
+def choose_opponent(episode, opponent_switch_interval):
+    if episode % opponent_switch_interval == 0:
+            if np.random.rand() < 0.5:
+                current_opponent = "rand"
+            else:
+                current_opponent = "ascending_columns"
+    else: current_opponent = "self"
+
+    return current_opponent
+
+
 if __name__ == "__main__":
     train_from_start = False
 
@@ -494,6 +514,9 @@ if __name__ == "__main__":
         step = 0
         epsilon = max(epsilon_end, epsilon_start * epsilon_decay**episode)
         game_ended = False
+
+        opponent_switch_interval = 5 # Swap to alternative opponent every x steps (and then back to "self")
+        current_opponent = choose_opponent(episode, opponent_switch_interval) # Self, Random or Ascending_Columns
 
         pygame.event.pump()
         while not done and step < max_steps_per_episode and not game_ended:
@@ -540,9 +563,9 @@ if __name__ == "__main__":
                         # Reward for blocking the opponent
                         reward += 20
                     # calculate opponennts move
-                    opponent_action = train_opponent(
-                        "ascending_columns", opponent_model, epsilon, next_state, step
-                    )
+                                        
+                    opponent_action = train_opponent(current_opponent, opponent_model, epsilon, next_state, step)
+
                     next_state_opponent = next_state.copy()
                     # opponent can be "rand" or "self"
                     if next_state[0, :, :, opponent_action].sum() < HEIGHT:
@@ -709,7 +732,7 @@ if __name__ == "__main__":
             if episode % visualization_frequency == 0:
                 screen.fill(BACKGROUND_COLOR)  # Clear the screen
                 draw_board(screen, state[0])
-                visualize_training(screen, q_values, random_move, action, reward)
+                visualize_training(screen, q_values, random_move, action, reward, current_opponent)
                 pygame.display.flip()
                 pygame.display.update()  # forced display update
                 pygame.time.wait(2000)
