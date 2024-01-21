@@ -1,5 +1,10 @@
 class config:
     def __init__(self):
+        
+        ###########################
+        ##### Agent variables #####
+        ###########################
+
         self.num_episodes = 10000
         self.learning_rate = 0.0005
 
@@ -32,5 +37,12 @@ class config:
         self.STATE_SHAPE = (
             2,
             self.HEIGHT,
-            self.WIDTH,
+            self.WIDTH
         )
+
+
+        ###########################
+        ##### Game variables ######
+        ###########################
+
+        
