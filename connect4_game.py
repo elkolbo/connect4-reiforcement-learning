@@ -18,15 +18,13 @@ def main():
     model.compile(optimizer="adam", loss="mse")
 
     model.load_weights("./checkpoints/my_checkpoint")
-    screen = pygame.display.set_mode(
-        (cf.WINDOW_WIDTH, cf.WINDOW_HEIGHT)
-    )
+    screen = pygame.display.set_mode((cf.WINDOW_WIDTH, cf.WINDOW_HEIGHT))
     pygame.display.set_caption("Connect 4")
 
     clock = pygame.time.Clock()
 
     board = reset_game()
-    current_player = 1
+    current_player = 2
 
     # Initialize game statistics
     your_wins = 0
@@ -42,8 +40,13 @@ def main():
                 pygame.quit()
                 sys.exit()
 
-            if event.type == pygame.MOUSEBUTTONDOWN and current_player == cf.HUMAN_PLAYER:
-                column = event.pos[0] // cf.CELL_SIZE - 1 # Column where to set the coin
+            if (
+                event.type == pygame.MOUSEBUTTONDOWN
+                and current_player == cf.HUMAN_PLAYER
+            ):
+                column = (
+                    event.pos[0] // cf.CELL_SIZE - 1
+                )  # Column where to set the coin
                 if 0 <= column < cf.WIDTH and board[0][column] == 0:
                     if drop_disc(board, column, current_player):
                         if check_win(board, current_player):
@@ -115,7 +118,8 @@ def main():
             screen,
             cf.RED if current_player == 1 else cf.BLUE,
             (
-                (cf.WINDOW_WIDTH - cf.WIDTH * cf.CELL_SIZE) // 2 + cf.WIDTH * cf.CELL_SIZE // 2,
+                (cf.WINDOW_WIDTH - cf.WIDTH * cf.CELL_SIZE) // 2
+                + cf.WIDTH * cf.CELL_SIZE // 2,
                 cf.CELL_SIZE // 2 + 25,
             ),
             cf.CELL_SIZE // 2 - 5,
