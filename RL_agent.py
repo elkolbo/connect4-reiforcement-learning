@@ -298,16 +298,16 @@ def is_blocking_opponent(board, action_column):
 
     # Find the empty row in the specified column
     empty_row = next_empty_row(temp_board, action_column)
-
+    last_disc=empty_row-1
     if empty_row is None:
         # The column is full, and placing a disc is not possible
         return False
 
     # Place a disc in the specified column
-    temp_board[0, empty_row, action_column] = 1
+    temp_board[1, last_disc, action_column] = 1
 
     # Check if this move blocks the opponent from connecting four discs
-    return not check_win(temp_board)
+    return check_win(temp_board)
 
 
 def next_empty_row(board, action):
@@ -336,9 +336,7 @@ def calculate_reward(board, action, current_player):
             # this is no longer needed
             # reward -= 10  # Give a penalty for placing a disc in a full column
         else:
-            # Check if placing a disc prevents the opponent from connecting four
-            if is_blocking_opponent(board, action):
-                reward += 10  # Give a significant reward for blocking the opponent
+            # Check if placing a disc prevents the opponent from connecting fou
 
             # Check if placing a disc next to many of your own
             adjacent_count = count_adjacent_discs(board, action, empty_row)
