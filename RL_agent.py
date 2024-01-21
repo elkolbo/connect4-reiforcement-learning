@@ -7,9 +7,12 @@ import pygame
 import os
 from datetime import datetime
 from tensorflow.keras.layers import Conv2D, Flatten, Dense, Concatenate
+from config import config
 
+# load the config to access all hyperparameters
 path = pathlib.Path(__file__).parent / "logs"
 
+config_values = config()
 # Set up TensorBoard writer
 log_parent_dir = path
 current_time = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -28,28 +31,12 @@ tensorboard_callback = tf.keras.callbacks.TensorBoard(
 
 # Initialize episode_losses list
 episode_losses = []
-num_episodes = 50
-visualization_frequency = 1  # Put in a high value to train faster
-
-# visualization constants
-# Constants
-WIDTH, HEIGHT = 7, 6
-CELL_SIZE = 100
-WINDOW_WIDTH, WINDOW_HEIGHT = WIDTH * CELL_SIZE, (HEIGHT + 2.5) * CELL_SIZE
-
-FPS = 30
-
-BACKGROUND_COLOR = (25, 25, 25)  # Dark background color
-GRID_COLOR = (100, 100, 100)  # Grid color
-RED = (255, 0, 0)
-YELLOW = (255, 255, 0)
-BLUE = (0, 0, 255)
 
 # intit pygame to visualize
 pygame.init()
 
 screen = pygame.display.set_mode(
-    (WINDOW_WIDTH, WINDOW_HEIGHT)
+    (config_values.WINDOW_WIDTH, config_values.WINDOW_HEIGHT)
 )  # Angepasste Fenstergröße
 pygame.display.set_caption("Connect 4")
 
@@ -57,49 +44,50 @@ clock = pygame.time.Clock()
 
 
 def draw_board(screen, board):
-    for col in range(WIDTH):
-        for row in range(HEIGHT):
+    for col in range(config_values.WIDTH):
+        for row in range(config_values.HEIGHT):
             pygame.draw.rect(
                 screen,
-                BACKGROUND_COLOR,
+                config_values.BACKGROUND_COLOR,
                 (
-                    col * CELL_SIZE,
-                    (row + 1.5) * CELL_SIZE,
-                    CELL_SIZE,
-                    CELL_SIZE,
+                    col * config_values.CELL_SIZE,
+                    (row + 1.5) * config_values.CELL_SIZE,
+                    config_values.CELL_SIZE,
+                    config_values.CELL_SIZE,
                 ),  # Angepasste Y-Koordinate
             )
             pygame.draw.circle(
                 screen,
-                GRID_COLOR,
+                config_values.GRID_COLOR,
                 (
-                    col * CELL_SIZE + CELL_SIZE // 2,
-                    (row + 1.5) * CELL_SIZE + CELL_SIZE // 2,  # Angepasste Y-Koordinate
+                    col * config_values.CELL_SIZE + config_values.CELL_SIZE // 2,
+                    (row + 1.5) * config_values.CELL_SIZE
+                    + config_values.CELL_SIZE // 2,  # Angepasste Y-Koordinate
                 ),
-                CELL_SIZE // 2,
+                config_values.CELL_SIZE // 2,
                 5,
             )  # Draw grid circles
             if board[0][row][col] == 1:
                 pygame.draw.circle(
                     screen,
-                    RED,
+                    config_values.RED,
                     (
-                        col * CELL_SIZE + CELL_SIZE // 2,
-                        (row + 1.5) * CELL_SIZE
-                        + CELL_SIZE // 2,  # Angepasste Y-Koordinate
+                        col * config_values.CELL_SIZE + config_values.CELL_SIZE // 2,
+                        (row + 1.5) * config_values.CELL_SIZE
+                        + config_values.CELL_SIZE // 2,  # Angepasste Y-Koordinate
                     ),
-                    CELL_SIZE // 2 - 5,
+                    config_values.CELL_SIZE // 2 - 5,
                 )
             elif board[1][row][col] == 1:
                 pygame.draw.circle(
                     screen,
-                    BLUE,
+                    config_values.BLUE,
                     (
-                        col * CELL_SIZE + CELL_SIZE // 2,
-                        (row + 1.5) * CELL_SIZE
-                        + CELL_SIZE // 2,  # Angepasste Y-Koordinate
+                        col * config_values.CELL_SIZE + config_values.CELL_SIZE // 2,
+                        (row + 1.5) * config_values.CELL_SIZE
+                        + config_values.CELL_SIZE // 2,  # Angepasste Y-Koordinate
                     ),
-                    CELL_SIZE // 2 - 5,
+                    config_values.CELL_SIZE // 2 - 5,
                 )
 
 
@@ -115,9 +103,9 @@ def visualize_training(screen, q_values, random_action, action, reward, opponent
             screen,
             color,
             (
-                col * CELL_SIZE + 0.25 * CELL_SIZE,
-                WINDOW_HEIGHT - int(value.numpy() * 200),
-                CELL_SIZE * 0.5,
+                col * config_values.CELL_SIZE + 0.25 * config_values.CELL_SIZE,
+                config_values.WINDOW_HEIGHT - int(value.numpy() * 200),
+                config_values.CELL_SIZE * 0.5,
                 int(value.numpy() * 200),
             ),
         )
@@ -125,7 +113,10 @@ def visualize_training(screen, q_values, random_action, action, reward, opponent
         # Display Q-values on the bars with 1 digit after the comma
         font_q_values = pygame.font.Font(None, 20)
         q_value_text = font_q_values.render(f"{value:.3f}", True, (255, 255, 255))
-        screen.blit(q_value_text, (col * CELL_SIZE, WINDOW_HEIGHT - 20))
+        screen.blit(
+            q_value_text,
+            (col * config_values.CELL_SIZE, config_values.WINDOW_HEIGHT - 20),
+        )
     # display reward of state
     font_reward = pygame.font.Font(None, 36)
     reward_text = font_reward.render(f"Reward:{reward:.3f}", True, (255, 255, 255))
@@ -151,17 +142,17 @@ def visualize_training(screen, q_values, random_action, action, reward, opponent
 
 
 # Constants
-NUM_ACTIONS = WIDTH
+NUM_ACTIONS = config_values.WIDTH
 STATE_SHAPE = (
     2,
-    HEIGHT,
-    WIDTH,
+    config_values.HEIGHT,
+    config_values.WIDTH,
 )  # 2 channels for current player, opponent
 
 
 # Deep Q Network (DQN) Model
 class DQN(tf.keras.Model):
-    def __init__(self, num_actions=WIDTH):
+    def __init__(self, num_actions=config_values.WIDTH):
         super(DQN, self).__init__()
         # Layers for processing the game field
         self.conv1 = Conv2D(
@@ -321,7 +312,7 @@ def is_blocking_opponent(board, action_column):
 
 def next_empty_row(board, action):
     try:
-        for row in range(HEIGHT):
+        for row in range(config_values.HEIGHT):
             if board[0, row, action] == 0 and board[1, row, action] == 0:
                 next = row
                 break
@@ -338,9 +329,9 @@ def calculate_reward(board, action, current_player):
     reward = 0
 
     # check if board has free spaces (not necessary but doesn't hurt)
-    if np.sum(board) < HEIGHT * WIDTH:
+    if np.sum(board) < config_values.HEIGHT * config_values.WIDTH:
         # Check if the column is full
-        if np.sum(board[:, :, action]) == HEIGHT:
+        if np.sum(board[:, :, action]) == config_values.HEIGHT:
             pass
             # this is no longer needed
             # reward -= 10  # Give a penalty for placing a disc in a full column
@@ -398,45 +389,33 @@ def train_opponent(opponent, opponent_model, epsilon, state, step):
     return action
 
 
-
 # Function to initialize the models
 def model_init(train_from_start):
-    learning_rate = 0.0005
-    gamma = 0.9
-    epsilon_start = 0.5
-    epsilon_end = 0.0
-    epsilon_decay = 0.9999
-    target_update_frequency = 10
-    batch_size = 64
     optimizer = tf.keras.optimizers.Adam(learning_rate)
     replay_buffer = ReplayBuffer(capacity=10000)
 
     if train_from_start:
         model = DQN(num_actions=NUM_ACTIONS)
-        model.build([(None, 2, HEIGHT, WIDTH), (None, 5)])
+        model.build([(None, 2, config_values.HEIGHT, config_values.WIDTH), (None, 5)])
         model.compile(optimizer="adam", loss="mse")
     else:
         model = DQN(num_actions=NUM_ACTIONS)
-        model.build([(None, 2, HEIGHT, WIDTH), (None, 5)])
+        model.build([(None, 2, config_values.HEIGHT, config_values.WIDTH), (None, 5)])
         model.compile(optimizer="adam", loss="mse")
 
         model.load_weights("./checkpoints/my_checkpoint")
 
     # Inside model_init() function
     opponent_model = DQN(num_actions=NUM_ACTIONS)
-    opponent_model.build([(None, 2, HEIGHT, WIDTH), (None, 5)])
+    opponent_model.build(
+        [(None, 2, config_values.HEIGHT, config_values.WIDTH), (None, 5)]
+    )
 
     return (
         model,
         opponent_model,
         replay_buffer,
         optimizer,
-        gamma,
-        epsilon_start,
-        epsilon_end,
-        epsilon_decay,
-        target_update_frequency,
-        batch_size,
     )
 
 
@@ -451,7 +430,7 @@ def get_rl_action(board, model):
 
 # Convert Connect 4 board to NumPy array and make input indifferent
 def board_to_numpy(board, current_player):
-    array = np.zeros((HEIGHT, WIDTH, 2), dtype=np.float32)
+    array = np.zeros((config_values.HEIGHT, config_values.WIDTH, 2), dtype=np.float32)
     array[:, :, 0] = board == current_player  # Current player's discs
     array[:, :, 1] = board == 3 - current_player  # Opponent's discs
     return array.transpose((2, 0, 1))[np.newaxis, :]  # Add batch dimension
@@ -466,7 +445,7 @@ def numpy_to_board(array, current_player):
     opponent_discs = np.where(array[:, :, 0] == 0)
 
     # Create an empty board
-    board = np.zeros((HEIGHT, WIDTH))
+    board = np.zeros((config_values.HEIGHT, config_values.WIDTH))
 
     # Fill in the board with player and opponent discs
     board[current_player_discs[0], current_player_discs[1]] = current_player
@@ -477,46 +456,46 @@ def numpy_to_board(array, current_player):
 
 def choose_opponent(episode, opponent_switch_interval):
     if episode % opponent_switch_interval == 0:
-            if np.random.rand() < 0.5:
-                current_opponent = "rand"
-            else:
-                current_opponent = "ascending_columns"
-    else: current_opponent = "self"
+        if np.random.rand() < 0.5:
+            current_opponent = "rand"
+        else:
+            current_opponent = "ascending_columns"
+    else:
+        current_opponent = "self"
 
     return current_opponent
 
 
 if __name__ == "__main__":
-    train_from_start = False
+    (model, opponent_model, replay_buffer, optimizer) = model_init(
+        config_values.train_from_start
+    )
 
-    (
-        model,
-        opponent_model,
-        replay_buffer,
-        optimizer,
-        gamma,
-        epsilon_start,
-        epsilon_end,
-        epsilon_decay,
-        target_update_frequency,
-        batch_size,
-    ) = model_init(train_from_start)
+    gamma = config_values.gamma
+    epsilon_start = config_values.epsilon_start
+    epsilon_end = config_values.epsilon_end
+    epsilon_decay = config_values.epsilon_decay
+    target_update_frequency = config_values.target_update_frequency
+    batch_size = config_values.batch_size
 
     max_steps_per_episode = (
         44  # higher than possible steps to enforce full board break to step in
     )
 
-    for episode in range(1, num_episodes + 1):
+    for episode in range(1, config_values.num_episodes + 1):
         print("New episode starting:")
         print("*" * 50)
-        state = np.zeros((1, 2, HEIGHT, WIDTH), dtype=np.float32)
+        state = np.zeros(
+            (1, 2, config_values.HEIGHT, config_values.WIDTH), dtype=np.float32
+        )
         done = False
         step = 0
         epsilon = max(epsilon_end, epsilon_start * epsilon_decay**episode)
         game_ended = False
 
-        opponent_switch_interval = 5 # Swap to alternative opponent every x steps (and then back to "self")
-        current_opponent = choose_opponent(episode, opponent_switch_interval) # Self, Random or Ascending_Columns
+        current_opponent = choose_opponent(
+            episode, config_values.opponent_switch_interval
+        )  # Self, Random or Ascending_Columns
 
         pygame.event.pump()
         while not done and step < max_steps_per_episode and not game_ended:
@@ -524,7 +503,7 @@ if __name__ == "__main__":
             action, q_values, random_move = epsilon_greedy_action(state, epsilon, model)
             # check if move is legal
             if (
-                state[0, :, :, action].sum() < HEIGHT and not game_ended
+                state[0, :, :, action].sum() < config_values.HEIGHT and not game_ended
             ):  # agent makes legal move and game has not ended
                 # calculate next state and reward of this legal move
                 # passing on without batch dimension
@@ -563,18 +542,23 @@ if __name__ == "__main__":
                         # Reward for blocking the opponent
                         reward += 20
                     # calculate opponennts move
-                                        
-                    opponent_action = train_opponent(current_opponent, opponent_model, epsilon, next_state, step)
+
+                    opponent_action = train_opponent(
+                        current_opponent, opponent_model, epsilon, next_state, step
+                    )
 
                     next_state_opponent = next_state.copy()
                     # opponent can be "rand" or "self"
-                    if next_state[0, :, :, opponent_action].sum() < HEIGHT:
+                    if (
+                        next_state[0, :, :, opponent_action].sum()
+                        < config_values.HEIGHT
+                    ):
                         empty_row = next_empty_row(next_state[0], opponent_action)
                         next_state_opponent[0, 1, empty_row, opponent_action] = 1
                     else:
                         # opponent chose an illegal move -> picking free column instead
-                        for column in range(WIDTH):
-                            if next_state[0, :, :, column].sum() < HEIGHT:
+                        for column in range(config_values.WIDTH):
+                            if next_state[0, :, :, column].sum() < config_values.HEIGHT:
                                 opponent_action = column
                                 break
                         empty_row = next_empty_row(next_state[0], opponent_action)
@@ -614,7 +598,8 @@ if __name__ == "__main__":
                         next_state_opponent.copy()
                     )  # copy for correct continuation in next episode
             elif (
-                not np.sum(next_state[0]) < HEIGHT * WIDTH and not game_ended
+                not np.sum(next_state[0]) < config_values.HEIGHT * config_values.WIDTH
+                and not game_ended
             ):  # check if board is full --> reason for illegal move
                 print("EPISODE ENDED BY FULL BOARD")
                 reward = -5
@@ -729,10 +714,12 @@ if __name__ == "__main__":
 
             step += 1
 
-            if episode % visualization_frequency == 0:
-                screen.fill(BACKGROUND_COLOR)  # Clear the screen
+            if episode % config_values.visualization_frequency == 0:
+                screen.fill(config_values.BACKGROUND_COLOR)  # Clear the screen
                 draw_board(screen, state[0])
-                visualize_training(screen, q_values, random_move, action, reward, current_opponent)
+                visualize_training(
+                    screen, q_values, random_move, action, reward, current_opponent
+                )
                 pygame.display.flip()
                 pygame.display.update()  # forced display update
                 pygame.time.wait(2000)
@@ -761,7 +748,3 @@ if __name__ == "__main__":
 
 # Close the writer
 summary_writer.close()
-
-
-# You can launch TensorBoard by running this command in the terminal
-# tensorboard --logdir=path/to/log/directory
