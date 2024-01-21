@@ -4,36 +4,7 @@ import tensorflow as tf
 import random
 from RL_agent import get_rl_action, DQN
 from game_functions import *
-from config import config
 
-# Constants
-WIDTH, HEIGHT = 7, 6
-CELL_SIZE = 100
-# WINDOW_WIDTH, WINDOW_HEIGHT = WIDTH * CELL_SIZE + 2, (HEIGHT + 2.5) * CELL_SIZE +2
-WINDOW_WIDTH, WINDOW_HEIGHT = (
-    WIDTH * CELL_SIZE + 2 * CELL_SIZE,
-    (HEIGHT + 2.5) * CELL_SIZE + 2,
-)
-
-FPS = 30
-
-# # Colors
-# BACKGROUND_COLOR = (200, 200, 200)  # Neutral background color
-# GRID_COLOR = (0, 0, 0)  # Grid color
-# RED = (255, 0, 0)
-# YELLOW = (255, 255, 0)
-# BLUE = (0, 0, 255)
-
-BACKGROUND_COLOR = (25, 25, 25)  # Dark background color
-GRID_COLOR = (100, 100, 100)  # Grid color
-RED = (255, 0, 0)
-YELLOW = (255, 255, 0)
-BLUE = (0, 0, 255)
-GLOW_GREEN = (0, 255, 0)
-
-# Define constants for players
-HUMAN_PLAYER = 1
-RL_PLAYER = 2
 
 # Initialize pygame
 pygame.init()
@@ -42,14 +13,14 @@ pygame.init()
 # Main game loop
 def main():
     model = DQN()
-    model = DQN(num_actions=WIDTH)
-    model.build([(None, 2, HEIGHT, WIDTH), (None, 5)])
+    model = DQN(num_actions=cf.WIDTH)
+    model.build([(None, 2, cf.HEIGHT, cf.WIDTH), (None, 5)])
     model.compile(optimizer="adam", loss="mse")
 
     model.load_weights("./checkpoints/my_checkpoint")
     screen = pygame.display.set_mode(
-        (WINDOW_WIDTH, WINDOW_HEIGHT)
-    )  # Angepasste Fenstergröße
+        (cf.WINDOW_WIDTH, cf.WINDOW_HEIGHT)
+    )
     pygame.display.set_caption("Connect 4")
 
     clock = pygame.time.Clock()
@@ -71,9 +42,9 @@ def main():
                 pygame.quit()
                 sys.exit()
 
-            if event.type == pygame.MOUSEBUTTONDOWN and current_player == HUMAN_PLAYER:
-                column = event.pos[0] // CELL_SIZE - 1
-                if 0 <= column < WIDTH and board[0][column] == 0:
+            if event.type == pygame.MOUSEBUTTONDOWN and current_player == cf.HUMAN_PLAYER:
+                column = event.pos[0] // cf.CELL_SIZE - 1
+                if 0 <= column < cf.WIDTH and board[0][column] == 0:
                     if drop_disc(board, column, current_player):
                         if check_win(board, current_player):
                             your_wins += 1
@@ -90,7 +61,7 @@ def main():
                         else:
                             current_player = 3 - current_player  # Switch players
             # Add logic for RL agent's move
-            if current_player == RL_PLAYER:
+            if current_player == cf.RL_PLAYER:
                 # Get the RL agent's action
                 rl_action = get_rl_action(board, model)
                 print(rl_action)
@@ -111,7 +82,7 @@ def main():
                     else:
                         current_player = 3 - current_player  # Switch players
                 elif drop_disc(
-                    board, random.randint(0, WIDTH - 1), current_player
+                    board, random.randint(0, cf.WIDTH - 1), current_player
                 ):  # Make random action if agent finds no action
                     if check_win(board, current_player):
                         rl_agent_wins += 1
@@ -128,25 +99,25 @@ def main():
                     else:
                         current_player = 3 - current_player  # Switch players
 
-        screen.fill(BACKGROUND_COLOR)
+        screen.fill(cf.BACKGROUND_COLOR)
         draw_board(screen, board)
 
         # Display current player
         pygame.draw.circle(
             screen,
-            RED if current_player == 1 else BLUE,
+            cf.RED if current_player == 1 else cf.BLUE,
             (
-                (WINDOW_WIDTH - WIDTH * CELL_SIZE) // 2 + WIDTH * CELL_SIZE // 2,
-                CELL_SIZE // 2 + 25,
+                (cf.WINDOW_WIDTH - cf.WIDTH * cf.CELL_SIZE) // 2 + cf.WIDTH * cf.CELL_SIZE // 2,
+                cf.CELL_SIZE // 2 + 25,
             ),
-            CELL_SIZE // 2 - 5,
+            cf.CELL_SIZE // 2 - 5,
         )
 
         # Draw stats background
         stats_background_rect = pygame.Rect(
-            0, WINDOW_HEIGHT - stats_height, WINDOW_WIDTH, stats_height
+            0, cf.WINDOW_HEIGHT - stats_height, cf.WINDOW_WIDTH, stats_height
         )
-        pygame.draw.rect(screen, BACKGROUND_COLOR, stats_background_rect)
+        pygame.draw.rect(screen, cf.BACKGROUND_COLOR, stats_background_rect)
 
         # Display game statistics
         font_stats = pygame.font.Font(None, 36)
@@ -161,13 +132,13 @@ def main():
         )  # White text
 
         rect_your_wins = your_wins_text.get_rect(
-            center=(WINDOW_WIDTH // 4, WINDOW_HEIGHT - stats_height // 2)
+            center=(cf.WINDOW_WIDTH // 4, cf.WINDOW_HEIGHT - stats_height // 2)
         )
         rect_rl_agent_wins = rl_agent_wins_text.get_rect(
-            center=(3 * WINDOW_WIDTH // 4, WINDOW_HEIGHT - stats_height // 2)
+            center=(3 * cf.WINDOW_WIDTH // 4, cf.WINDOW_HEIGHT - stats_height // 2)
         )
         rect_draws = draws_text.get_rect(
-            center=(WINDOW_WIDTH // 2, WINDOW_HEIGHT - stats_height // 2)
+            center=(cf.WINDOW_WIDTH // 2, cf.WINDOW_HEIGHT - stats_height // 2)
         )
 
         screen.blit(your_wins_text, rect_your_wins)
@@ -175,7 +146,7 @@ def main():
         screen.blit(draws_text, rect_draws)
 
         pygame.display.flip()
-        clock.tick(FPS)
+        clock.tick(cf.FPS)
 
 
 if __name__ == "__main__":

@@ -1,80 +1,76 @@
 import pygame
 import sys
 import tensorflow as tf
-import random
 from RL_agent import get_rl_action, DQN
 from game_functions import *
 from config import config
 
 
-config_values = config()
+cf = config() # config values
+
 
 # Function to draw the Connect 4 board
 def draw_board(screen, board):
-    # Draw a stylish frame around the entire window
-    frame_rect = pygame.Rect(0, 0, WINDOW_WIDTH, WINDOW_HEIGHT)
-    pygame.draw.rect(screen, GRID_COLOR, frame_rect, border_radius=10)
+    frame_rect = pygame.Rect(0, 0, cf.WINDOW_WIDTH, cf.WINDOW_HEIGHT)
+    pygame.draw.rect(screen, cf.GRID_COLOR, frame_rect, border_radius=10)
 
-    # Draw the Connect 4 board inside the frame, centered
+    # Draw the Connect 4 board inside the background frame
     board_rect = pygame.Rect(
-        (WINDOW_WIDTH - WIDTH * CELL_SIZE) // 2,
-        (WINDOW_HEIGHT - (HEIGHT + 2.5) * CELL_SIZE) // 2,
-        WIDTH * CELL_SIZE,
-        HEIGHT * CELL_SIZE,
+        (cf.WINDOW_WIDTH - cf.WIDTH * cf.CELL_SIZE) // 2,
+        (cf.WINDOW_HEIGHT - (cf.HEIGHT + 2.5) * cf.CELL_SIZE) // 2,
+        cf.WIDTH * cf.CELL_SIZE,
+        cf.HEIGHT * cf.CELL_SIZE,
     )
 
-    # Draw a glowing green border around the board
-    pygame.draw.rect(screen, GLOW_GREEN, board_rect, border_radius=10, width=5)
+    pygame.draw.rect(screen, cf.BACKGROUND_COLOR, board_rect)
 
-    pygame.draw.rect(screen, BACKGROUND_COLOR, board_rect)
-
-    for col in range(WIDTH):
-        for row in range(HEIGHT):
+    for col in range(cf.WIDTH):
+        for row in range(cf.HEIGHT):
             pygame.draw.rect(
                 screen,
-                BACKGROUND_COLOR,
+                cf.BACKGROUND_COLOR,
                 (
-                    board_rect.left + col * CELL_SIZE,
-                    board_rect.top + (row + 1.5) * CELL_SIZE,
-                    CELL_SIZE,
-                    CELL_SIZE,
+                    board_rect.left + col * cf.CELL_SIZE,
+                    board_rect.top + (row + 1.5) * cf.CELL_SIZE,
+                    cf.CELL_SIZE,
+                    cf.CELL_SIZE,
                 ),
             )
             pygame.draw.circle(
                 screen,
-                GRID_COLOR,
+                cf.GRID_COLOR,
                 (
-                    board_rect.left + col * CELL_SIZE + CELL_SIZE // 2,
-                    board_rect.top + (row + 1.5) * CELL_SIZE + CELL_SIZE // 2,
+                    board_rect.left + col * cf.CELL_SIZE + cf.CELL_SIZE // 2,
+                    board_rect.top + (row + 1.5) * cf.CELL_SIZE + cf.CELL_SIZE // 2,
                 ),
-                CELL_SIZE // 2,
+                cf.CELL_SIZE // 2,
                 5,
             )
             if board[row][col] == 1:
                 pygame.draw.circle(
                     screen,
-                    RED,
+                    cf.RED,
                     (
-                        board_rect.left + col * CELL_SIZE + CELL_SIZE // 2,
-                        board_rect.top + (row + 1.5) * CELL_SIZE + CELL_SIZE // 2,
+                        board_rect.left + col * cf.CELL_SIZE + cf.CELL_SIZE // 2,
+                        board_rect.top + (row + 1.5) * cf.CELL_SIZE + cf.CELL_SIZE // 2,
                     ),
-                    CELL_SIZE // 2 - 5,
+                    cf.CELL_SIZE // 2 - 5,
                 )
             elif board[row][col] == 2:
                 pygame.draw.circle(
                     screen,
-                    BLUE,
+                    cf.BLUE,
                     (
-                        board_rect.left + col * CELL_SIZE + CELL_SIZE // 2,
-                        board_rect.top + (row + 1.5) * CELL_SIZE + CELL_SIZE // 2,
+                        board_rect.left + col * cf.CELL_SIZE + cf.CELL_SIZE // 2,
+                        board_rect.top + (row + 1.5) * cf.CELL_SIZE + cf.CELL_SIZE // 2,
                     ),
-                    CELL_SIZE // 2 - 5,
+                    cf.CELL_SIZE // 2 - 5,
                 )
 
 
 # Function to drop a disc in a column
 def drop_disc(board, col, player):
-    for row in range(HEIGHT - 1, -1, -1):
+    for row in range(cf.HEIGHT - 1, -1, -1):
         if board[row][col] == 0:
             board[row][col] = player
             return True
@@ -84,23 +80,23 @@ def drop_disc(board, col, player):
 # Function to check for a win
 def check_win(board, player):
     # Check horizontally, vertically, and diagonally
-    for row in range(HEIGHT):
-        for col in range(WIDTH - 3):
+    for row in range(cf.HEIGHT):
+        for col in range(cf.WIDTH - 3):
             if all(board[row][col + i] == player for i in range(4)):
                 return True
 
-    for col in range(WIDTH):
-        for row in range(HEIGHT - 3):
+    for col in range(cf.WIDTH):
+        for row in range(cf.HEIGHT - 3):
             if all(board[row + i][col] == player for i in range(4)):
                 return True
 
-    for row in range(3, HEIGHT):
-        for col in range(WIDTH - 3):
+    for row in range(3, cf.HEIGHT):
+        for col in range(cf.WIDTH - 3):
             if all(board[row - i][col + i] == player for i in range(4)):
                 return True
 
-    for row in range(HEIGHT - 3):
-        for col in range(WIDTH - 3):
+    for row in range(cf.HEIGHT - 3):
+        for col in range(cf.WIDTH - 3):
             if all(board[row + i][col + i] == player for i in range(4)):
                 return True
 
@@ -109,12 +105,12 @@ def check_win(board, player):
 
 # Function to check for a draw
 def check_draw(board):
-    return all(board[0][col] != 0 for col in range(WIDTH))
+    return all(board[0][col] != 0 for col in range(cf.WIDTH))
 
 
 # Function to reset the game
 def reset_game():
-    return [[0] * WIDTH for _ in range(HEIGHT)]
+    return [[0] * cf.WIDTH for _ in range(cf.HEIGHT)]
 
 
 # Function to display the end screen
@@ -133,11 +129,11 @@ def end_screen(message, screen, player1_wins, player2_wins, draws):
         text_large_black, (2, 2)
     )  # Offset by (2, 2) to create a border
 
-    # Blit the white text on top of the black-bordered text
+    # Blit the white text on top of the black-bordered text (shadow)
     text_large_surface.blit(text_large_white, (0, 0))
 
     rect_large = text_large_surface.get_rect(
-        center=(WIDTH * CELL_SIZE // 2, HEIGHT * CELL_SIZE // 2)
+        center=(cf.WIDTH * cf.CELL_SIZE // 2, cf.HEIGHT * cf.CELL_SIZE // 2)
     )
 
     # Display game statistics with a smaller font
@@ -163,7 +159,7 @@ def end_screen(message, screen, player1_wins, player2_wins, draws):
         stats_text_black, (2, 2)
     )  # Offset by (2, 2) to create a border
 
-    # Blit the white text on top of the black-bordered text for stats_text
+    # Blit the white text on top of the black-bordered text for stats_text (shadow)
     stats_text_surface.blit(stats_text_white, (0, 0))
 
     # Display instructions with a smaller font
@@ -187,15 +183,15 @@ def end_screen(message, screen, player1_wins, player2_wins, draws):
 
     # Calculate the size of the background surface
     padding = 20
-    background_width = (
+    background_WIDTH = (
         max(
-            rect_large.width,
+            rect_large.height,
             stats_text_surface.get_width(),
             instructions_surface.get_width(),
         )
         + 2 * padding
     )
-    background_height = (
+    background_HEIGHT = (
         rect_large.height
         + stats_text_surface.get_height()
         + instructions_surface.get_height()
@@ -203,25 +199,25 @@ def end_screen(message, screen, player1_wins, player2_wins, draws):
     )
 
     background_surface = pygame.Surface(
-        (background_width, background_height), pygame.SRCALPHA
+        (background_WIDTH, background_HEIGHT), pygame.SRCALPHA
     )
     pygame.draw.rect(
         background_surface,
         (255, 255, 255, 128),
-        (0, 0, background_width, background_height),
+        (0, 0, background_WIDTH, background_HEIGHT),
         border_radius=20,
     )
     pygame.draw.rect(
         background_surface,
         (255, 255, 255),
-        (0, 0, background_width, background_height),
+        (0, 0, background_WIDTH, background_HEIGHT),
         5,
         border_radius=20,
     )
 
     # Blit the text surface on the background surface
     background_surface.blit(
-        text_large_surface, (background_width // 2 - rect_large.width // 2, padding)
+        text_large_surface, (background_WIDTH // 2 - rect_large.width // 2, padding)
     )
 
     # Blit the game statistics on the background surface
@@ -230,7 +226,7 @@ def end_screen(message, screen, player1_wins, player2_wins, draws):
     )
 
     # Blit the instructions on the background surface, centered horizontally
-    instructions_x = (background_width - instructions_surface.get_width()) // 2
+    instructions_x = (background_WIDTH - instructions_surface.get_width()) // 2
     background_surface.blit(
         instructions_surface,
         (
@@ -241,7 +237,7 @@ def end_screen(message, screen, player1_wins, player2_wins, draws):
 
     # Adjust the position of the background_rect to center it on the screen
     background_rect = background_surface.get_rect(
-        center=(WINDOW_WIDTH // 2, WINDOW_HEIGHT // 2)
+        center=(cf.WINDOW_WIDTH // 2, cf.WINDOW_HEIGHT // 2)
     )
     screen.blit(background_surface, background_rect)
 
