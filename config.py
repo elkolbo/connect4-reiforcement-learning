@@ -1,8 +1,8 @@
 class config:
     def __init__(self):
-        ###########################
-        ##### Agent variables #####
-        ###########################
+        #################################
+        ##### Adjust variables here #####
+        #################################
 
         self.num_episodes = 5000
         self.learning_rate = 0.001
@@ -25,8 +25,8 @@ class config:
         self.WIDTH, self.HEIGHT = 7, 6
         self.CELL_SIZE = 100
         self.WINDOW_WIDTH, self.WINDOW_HEIGHT = (
-            self.WIDTH * self.CELL_SIZE,
-            (self.HEIGHT + 2.5) * self.CELL_SIZE,
+            self.WIDTH * self.CELL_SIZE + 2 * self.CELL_SIZE, # Width of the window
+            (self.HEIGHT + 2.5) * self.CELL_SIZE,             # Hight of the window
         )
 
         self.FPS = 30
