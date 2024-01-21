@@ -130,9 +130,10 @@ class ReplayBuffer:
         self.position = (self.position + 1) % self.capacity
         self.next_index += 1
 
-    def update_loss(self, index, new_loss):
+    def update_loss(self, indices, new_loss):
         # Update the loss for the sample with the specified index
-        self.memory.loc[self.memory["index"] == index, "loss"] = new_loss
+        for i, index in enumerate(indices):
+            self.memory.loc[self.memory["index"] == index, "loss"] = new_loss[i]
 
     def sample(self, batch_size):
         if len(self.memory) < batch_size:

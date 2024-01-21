@@ -232,7 +232,7 @@ if __name__ == "__main__":
                     board_full_flags,
                     losses,
                 ) = zip(*batch)
-
+                indices = np.array(indices)
                 states = np.concatenate(states)
                 actions = np.array(actions, dtype=np.int32).reshape(-1, 1)
                 next_states = np.concatenate(next_states)
@@ -273,17 +273,20 @@ if __name__ == "__main__":
 
                     target_q_values = rewards + gamma * next_q_values
 
-                    loss = tf.reduce_mean(tf.square(current_q_values - target_q_values))
-
+                    loss = tf.square(
+                        current_q_values - target_q_values
+                    )  # squared error to get positive loss
+                    replay_buffer.update_loss(indices, loss)
+                    batch_loss = tf.reduce_sum(loss)
                     # Append loss to the list for visualization
                     episode_losses.append(loss.numpy())
 
                     # Log loss to TensorBoard
                     with summary_writer.as_default():
-                        tf.summary.scalar("Loss", loss.numpy(), step=episode)
+                        tf.summary.scalar("Loss", batch_loss.numpy(), step=episode)
                         tf.summary.scalar("Epsilon", epsilon, step=episode)
 
-                gradients = tape.gradient(loss, model.trainable_variables)
+                gradients = tape.gradient(batch_loss, model.trainable_variables)
                 # Clip gradients to stabilize training
                 clipped_gradients, _ = tf.clip_by_global_norm(gradients, 2)
                 max_gradient = tf.reduce_max(
