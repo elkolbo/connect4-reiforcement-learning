@@ -3,6 +3,7 @@ import numpy as np
 import random
 import pathlib
 import pygame
+import pandas as pd
 
 import os
 from datetime import datetime
@@ -10,6 +11,143 @@ from tensorflow.keras.layers import Conv2D, Flatten, Dense, Concatenate
 from config import config
 
 config_values = config()
+
+
+# Deep Q Network (DQN) Model
+class DQN(tf.keras.Model):
+    def __init__(self, num_actions=config_values.WIDTH):
+        super(DQN, self).__init__()
+        # Layers for processing the game field
+        self.conv1 = Conv2D(
+            32, (3, 3), strides=(1, 1), padding="same", activation="relu"
+        )
+        self.conv2 = Conv2D(
+            64, (3, 3), strides=(1, 1), padding="same", activation="relu"
+        )
+        self.conv3 = Conv2D(
+            64, (3, 3), strides=(1, 1), padding="same", activation="relu"
+        )
+        self.flatten = Flatten()
+
+        # Layers for processing flags
+        self.flag_fc = Dense(64, activation="relu")  # Adjust the size as needed
+        self.flag_output = Dense(1, activation="sigmoid")
+
+        # Common dense layers
+        self.fc1 = Dense(256, activation="relu")
+        self.fc2 = Dense(num_actions)
+
+    def call(self, inputs):
+        # Separate game field and flags
+        game_field = inputs[0]
+        flags = inputs[1]
+
+        # Process game field
+        x = self.conv1(game_field)
+        x = self.conv2(x)
+        x = self.conv3(x)
+        x = self.flatten(x)
+
+        # Process flags separately
+        flags_output = self.flag_fc(flags)
+        flags_output = self.flag_output(flags_output)
+
+        # Concatenate the processed game field and flags
+        x = tf.concat([x, flags_output], axis=-1)
+
+        # Common dense layers
+        output = self.fc2(x)
+        output.set_shape((None, NUM_ACTIONS))  # Adjust NUM_ACTIONS as needed
+        return output
+
+    def set_custom_weights(self, weights):
+        # Set custom weights for each layer
+        self.conv1.set_weights(weights[0:2])
+        self.conv2.set_weights(weights[2:4])
+        self.conv3.set_weights(weights[4:6])
+        self.fc1.set_weights(weights[6:8])
+        self.fc2.set_weights(weights[8:10])
+
+
+class ReplayBuffer:
+    def __init__(self, capacity):
+        self.capacity = capacity
+        self.memory = pd.DataFrame(
+            columns=[
+                "index",  # Add an 'index' column to store unique identifiers for each sample
+                "state",
+                "action",
+                "next_state",
+                "reward",
+                "game_terminated_flag",
+                "opponent_won_flag",
+                "agent_won_flag",
+                "illegal_agent_move_flag",
+                "board_full_flag",
+                "loss",  # Add a 'loss' column to track the loss for each sample
+            ]
+        )
+        self.position = 0
+        self.next_index = 0  # To assign unique indices to new samples
+
+    def push(
+        self,
+        state,
+        action,
+        next_state,
+        reward,
+        game_terminated_flag,
+        opponent_won_flag,
+        agent_won_flag,
+        illegal_agent_move_flag,
+        board_full_flag,
+        loss,
+    ):
+        row = pd.DataFrame(
+            [
+                (
+                    self.next_index,
+                    state,
+                    action,
+                    next_state,
+                    reward,
+                    game_terminated_flag,
+                    opponent_won_flag,
+                    agent_won_flag,
+                    illegal_agent_move_flag,
+                    board_full_flag,
+                    loss,  # Include the loss value
+                )
+            ],
+            columns=self.memory.columns,
+        )
+
+        if len(self.memory) < self.capacity:
+            self.memory = pd.concat([self.memory, row], ignore_index=True)
+        else:
+            self.memory.loc[self.position] = row.iloc[0]
+
+        self.position = (self.position + 1) % self.capacity
+        self.next_index += 1
+
+    def update_loss(self, index, new_loss):
+        # Update the loss for the sample with the specified index
+        self.memory.loc[self.memory["index"] == index, "loss"] = new_loss
+
+    def sample(self, batch_size):
+        if len(self.memory) < batch_size:
+            raise ValueError("Not enough samples in the replay buffer")
+
+        # Assuming you have a 'loss' column in your DataFrame indicating the current loss
+        sorted_memory = self.memory.sort_values(by="loss", ascending=False)
+
+        # Take the top batch_size samples with the highest loss
+        selected_samples = sorted_memory.head(batch_size)
+
+        # Convert the DataFrame back to a list of tuples for compatibility with your original code
+        selected_samples_list = [tuple(row) for row in selected_samples.values]
+
+        return selected_samples_list
 
 
 def draw_board(screen, board):
@@ -119,100 +257,6 @@ STATE_SHAPE = (
 )  # 2 channels for current player, opponent
 
 
-# Deep Q Network (DQN) Model
-class DQN(tf.keras.Model):
-    def __init__(self, num_actions=config_values.WIDTH):
-        super(DQN, self).__init__()
-        # Layers for processing the game field
-        self.conv1 = Conv2D(
-            32, (3, 3), strides=(1, 1), padding="same", activation="relu"
-        )
-        self.conv2 = Conv2D(
-            64, (3, 3), strides=(1, 1), padding="same", activation="relu"
-        )
-        self.conv3 = Conv2D(
-            64, (3, 3), strides=(1, 1), padding="same", activation="relu"
-        )
-        self.flatten = Flatten()
-
-        # Layers for processing flags
-        self.flag_fc = Dense(64, activation="relu")  # Adjust the size as needed
-        self.flag_output = Dense(1, activation="sigmoid")
-
-        # Common dense layers
-        self.fc1 = Dense(256, activation="relu")
-        self.fc2 = Dense(num_actions)
-
-    def call(self, inputs):
-        # Separate game field and flags
-        game_field = inputs[0]
-        flags = inputs[1]
-
-        # Process game field
-        x = self.conv1(game_field)
-        x = self.conv2(x)
-        x = self.conv3(x)
-        x = self.flatten(x)
-
-        # Process flags separately
-        flags_output = self.flag_fc(flags)
-        flags_output = self.flag_output(flags_output)
-
-        # Concatenate the processed game field and flags
-        x = tf.concat([x, flags_output], axis=-1)
-
-        # Common dense layers
-        output = self.fc2(x)
-        output.set_shape((None, NUM_ACTIONS))  # Adjust NUM_ACTIONS as needed
-        return output
-
-    def set_custom_weights(self, weights):
-        # Set custom weights for each layer
-        self.conv1.set_weights(weights[0:2])
-        self.conv2.set_weights(weights[2:4])
-        self.conv3.set_weights(weights[4:6])
-        self.fc1.set_weights(weights[6:8])
-        self.fc2.set_weights(weights[8:10])
-
-
-# Experience Replay Buffer
-class ReplayBuffer:
-    def __init__(self, capacity):
-        self.capacity = capacity
-        self.memory = []
-        self.position = 0
-
-    def push(
-        self,
-        state,
-        action,
-        next_state,
-        reward,
-        game_terminated_flag,
-        opponent_won_flag,
-        agent_won_flag,
-        illegal_agent_move_flag,
-        board_full_flag,
-    ):
-        if len(self.memory) < self.capacity:
-            self.memory.append(None)
-        self.memory[self.position] = (
-            state,
-            action,
-            next_state,
-            reward,
-            game_terminated_flag,
-            opponent_won_flag,
-            agent_won_flag,
-            illegal_agent_move_flag,
-            board_full_flag,
-        )
-        self.position = (self.position + 1) % self.capacity
-
-    def sample(self, batch_size):
-        return random.sample(self.memory, batch_size)
-
-
 # Epsilon-Greedy Exploration
 def epsilon_greedy_action(state, epsilon, model):
     q_values = model([state, np.expand_dims(np.zeros(5), axis=0)])
@@ -319,11 +363,11 @@ def calculate_reward(board, action, current_player):
 def count_adjacent_discs(board, action_column):
     # check surrounings and count discs
     count = 0
-    action_row=0
-    for row in range(config_values.HEIGHT): #find row in which ction was taken
-        if board[0,row,action_column]==1:
-            action_row=row
-    
+    action_row = 0
+    for row in range(config_values.HEIGHT):  # find row in which ction was taken
+        if board[0, row, action_column] == 1:
+            action_row = row
+
     # go around disc with catching errors
     for row_offset in [-1, 0, 1]:
         for column_offset in [-1, 0, 1]:

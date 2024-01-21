@@ -1,6 +1,5 @@
 class config:
     def __init__(self):
-        
         ###########################
         ##### Agent variables #####
         ###########################
@@ -11,14 +10,14 @@ class config:
         self.gamma = 0.9  # discount factor for q-learning
 
         self.train_from_start = False
-        
+
         self.epsilon_start = 0.5
         self.epsilon_end = 0.0
         self.epsilon_decay = 0.9999
         self.target_update_frequency = 10
         self.batch_size = 64
 
-        self.visualization_frequency = 1  # Put in a high value to train faster
+        self.visualization_frequency = 1000  # Put in a high value to train faster
 
         self.opponent_switch_interval = 5
 
@@ -36,12 +35,7 @@ class config:
         self.YELLOW = (255, 255, 0)
         self.BLUE = (0, 0, 255)
         self.NUM_ACTIONS = self.WIDTH
-        self.STATE_SHAPE = (
-            2,
-            self.HEIGHT,
-            self.WIDTH
-        )
-
+        self.STATE_SHAPE = (2, self.HEIGHT, self.WIDTH)
 
         ###########################
         ##### Game variables ######

@@ -108,6 +108,7 @@ if __name__ == "__main__":
                         agent_won_flag=1,
                         illegal_agent_move_flag=0,
                         board_full_flag=0,
+                        loss=1000000,
                     )
 
                     game_ended = True
@@ -156,6 +157,7 @@ if __name__ == "__main__":
                             agent_won_flag=0,
                             illegal_agent_move_flag=0,
                             board_full_flag=0,
+                            loss=1000000,
                         )
                         game_ended = True
 
@@ -170,6 +172,7 @@ if __name__ == "__main__":
                             agent_won_flag=0,
                             illegal_agent_move_flag=0,
                             board_full_flag=0,
+                            loss=1000000,
                         )
                     next_state = (
                         next_state_opponent.copy()
@@ -190,6 +193,7 @@ if __name__ == "__main__":
                     agent_won_flag=0,
                     illegal_agent_move_flag=0,
                     board_full_flag=1,
+                    loss=1000000,
                 )
                 game_ended = True
             elif not game_ended:  # agent makes illegal move
@@ -205,6 +209,7 @@ if __name__ == "__main__":
                     agent_won_flag=0,
                     illegal_agent_move_flag=1,
                     board_full_flag=0,
+                    loss=1000000,
                 )
                 print("Episode ended by agent illegal move")
                 game_ended = True
@@ -215,6 +220,7 @@ if __name__ == "__main__":
             if len(replay_buffer.memory) > batch_size:
                 batch = replay_buffer.sample(batch_size)
                 (
+                    indices,
                     states,
                     actions,
                     next_states,
@@ -224,6 +230,7 @@ if __name__ == "__main__":
                     agent_won_flags,
                     illegal_agent_move_flags,
                     board_full_flags,
+                    losses,
                 ) = zip(*batch)
 
                 states = np.concatenate(states)
@@ -239,6 +246,7 @@ if __name__ == "__main__":
                     illegal_agent_move_flags, dtype=np.float32
                 )
                 board_full_flags = np.array(board_full_flags, dtype=np.float32)
+                losses = np.array(losses)
 
                 with tf.GradientTape() as tape:
                     flags = np.column_stack(
@@ -252,9 +260,11 @@ if __name__ == "__main__":
                     )
 
                     current_q_values = model([states, flags])
+                    one_hot = tf.squeeze(tf.one_hot(actions, NUM_ACTIONS), axis=1)
+                    current_q_values = one_hot * current_q_values
                     current_q_values = tf.reduce_sum(
-                        tf.one_hot(actions, NUM_ACTIONS) * current_q_values,
-                        axis=1,
+                        current_q_values,
+                        axis=-1,
                         keepdims=True,
                     )
 
