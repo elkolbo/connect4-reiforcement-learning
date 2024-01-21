@@ -391,7 +391,7 @@ def train_opponent(opponent, opponent_model, epsilon, state, step):
 
 # Function to initialize the models
 def model_init(train_from_start):
-    optimizer = tf.keras.optimizers.Adam(learning_rate)
+    optimizer = tf.keras.optimizers.Adam(config_values.learning_rate)
     replay_buffer = ReplayBuffer(capacity=10000)
 
     if train_from_start:
