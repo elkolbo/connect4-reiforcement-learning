@@ -28,7 +28,7 @@ tensorboard_callback = tf.keras.callbacks.TensorBoard(
 
 # Initialize episode_losses list
 episode_losses = []
-num_episodes = 10000
+num_episodes = 50
 visualization_frequency = 10000  # Put in a high value to train faster
 
 # visualization constants
@@ -373,7 +373,7 @@ def count_adjacent_discs(board, action_column, action_row):
 
 
 # Function to train the opponent
-def train_opponent(opponent, opponent_model, epsilon, state):
+def train_opponent(opponent, opponent_model, epsilon, state, step):
     if opponent == "rand":
         action = np.random.randint(NUM_ACTIONS)
     elif opponent == "self":
@@ -382,8 +382,12 @@ def train_opponent(opponent, opponent_model, epsilon, state):
         state_copy = state.copy()
         state_copy = np.flip(state_copy, axis=1)
         action, _, _ = epsilon_greedy_action(state_copy, epsilon, opponent_model)
+    elif opponent == "ascending_columns":
+        # Opponent places discs in columns in ascending order
+        action = step % NUM_ACTIONS
     # Add more opponent strategies as needed
     return action
+
 
 
 # Function to initialize the models
@@ -535,7 +539,7 @@ if __name__ == "__main__":
                         reward += 20
                     # calculate opponennts move
                     opponent_action = train_opponent(
-                        "self", opponent_model, epsilon, next_state
+                        "ascending_columns", opponent_model, epsilon, next_state, step
                     )
                     next_state_opponent = next_state.copy()
                     # opponent can be "rand" or "self"
