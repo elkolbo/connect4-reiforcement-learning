@@ -43,7 +43,7 @@ def main():
                 sys.exit()
 
             if event.type == pygame.MOUSEBUTTONDOWN and current_player == cf.HUMAN_PLAYER:
-                column = event.pos[0] // cf.CELL_SIZE - 1
+                column = event.pos[0] // cf.CELL_SIZE - 1 # Column where to set the coin
                 if 0 <= column < cf.WIDTH and board[0][column] == 0:
                     if drop_disc(board, column, current_player):
                         if check_win(board, current_player):
