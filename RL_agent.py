@@ -298,13 +298,13 @@ def is_blocking_opponent(board, action_column):
 
     # Find the empty row in the specified column
     empty_row = next_empty_row(temp_board, action_column)
-    last_disc=empty_row-1
+
     if empty_row is None:
         # The column is full, and placing a disc is not possible
         return False
 
     # Place a disc in the specified column
-    temp_board[1, last_disc, action_column] = 1
+    temp_board[1, empty_row, action_column] = 1
 
     # Check if this move blocks the opponent from connecting four discs
     return check_win(temp_board)
@@ -394,7 +394,7 @@ def train_opponent(opponent, opponent_model, epsilon, state, step):
 def model_init(train_from_start):
     learning_rate = 0.0005
     gamma = 0.9
-    epsilon_start = 0.0
+    epsilon_start = 0.5
     epsilon_end = 0.0
     epsilon_decay = 0.9999
     target_update_frequency = 10
@@ -494,7 +494,7 @@ if __name__ == "__main__":
         step = 0
         epsilon = max(epsilon_end, epsilon_start * epsilon_decay**episode)
         game_ended = False
-        next_state_opponent = np.zeros((1, 2, HEIGHT, WIDTH), dtype=np.float32)  # MoNew
+
         pygame.event.pump()
         while not done and step < max_steps_per_episode and not game_ended:
             # move of the RL agent
@@ -534,7 +534,9 @@ if __name__ == "__main__":
                     game_ended = True
 
                 else:  # move was a "normal" game move, game continues
-                    if is_blocking_opponent(next_state_opponent[0], action):
+                    if is_blocking_opponent(
+                        state[0], action
+                    ):  # check if the move leads to a win if opponent did it
                         # Reward for blocking the opponent
                         reward += 20
                     # calculate opponennts move
