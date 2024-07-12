@@ -9,7 +9,7 @@ class config:
 
         self.gamma = 0.9  # Discount factor for q-learning
 
-        self.train_from_start = False
+        self.train_from_start = True
 
         self.epsilon_start = 0.9
         self.epsilon_end = 0.1
@@ -17,7 +17,7 @@ class config:
         self.target_update_frequency = 200
         self.batch_size = 64
 
-        self.visualization_frequency = 1000  # Put in a high value to train faster
+        self.visualization_frequency = 100  # Put in a high value to train faster
 
         self.opponent_switch_interval = 3
 
@@ -25,8 +25,10 @@ class config:
         self.WIDTH, self.HEIGHT = 7, 6
         self.CELL_SIZE = 100
         self.WINDOW_WIDTH, self.WINDOW_HEIGHT = (
-            self.WIDTH * self.CELL_SIZE + 2 * self.CELL_SIZE, # Width of the window
-            (self.HEIGHT + 2.5) * self.CELL_SIZE,             # Hight of the window
+            int(
+                self.WIDTH * self.CELL_SIZE + 2 * self.CELL_SIZE
+            ),  # Width of the window
+            int((self.HEIGHT + 2.5) * self.CELL_SIZE),  # Hight of the window
         )
 
         self.FPS = 30
