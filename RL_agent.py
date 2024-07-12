@@ -86,9 +86,9 @@ if __name__ == "__main__":
                 # passing on without batch dimension
                 empty_row = next_empty_row(state[0], action)
                 next_state = state.copy()
-                next_state[
-                    0, 0, empty_row, action
-                ] = 1  # updation state, channel 0 is always for agent
+                next_state[0, 0, empty_row, action] = (
+                    1  # updation state, channel 0 is always for agent
+                )
                 next_state_opponent = next_state.copy()
                 reward = calculate_reward(next_state[0], action, current_player=1)
                 # agent made legal move, now check the outcome of the move:
@@ -333,7 +333,7 @@ if __name__ == "__main__":
     print("Training complete.")
 
     # Save the weights
-    model.save_weights("./checkpoints/my_checkpoint")
+    model.save_weights("./checkpoints/my_checkpoint.h5")
 
 
 # Close the writer

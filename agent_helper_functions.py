@@ -414,7 +414,7 @@ def model_init(train_from_start):
         model.build([(None, 2, config_values.HEIGHT, config_values.WIDTH), (None, 5)])
         model.compile(optimizer="adam", loss="mse")
 
-        model.load_weights("./checkpoints/my_checkpoint")
+        model.load_weights("./checkpoints/my_checkpoint.h5")
 
     # Inside model_init() function
     opponent_model = DQN(num_actions=NUM_ACTIONS)
