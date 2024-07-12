@@ -1,5 +1,4 @@
-pygame==2.0.1
-tensorflow
-numpy
+pygame==2.5.2
+numpy==1.26.3
 pathlib==1.0.1
-pandas
+pandas==2.1.4
