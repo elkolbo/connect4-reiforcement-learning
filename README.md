@@ -22,6 +22,7 @@ With the following configurations the repo will be in a working state:
 
 1. Create a enviroment with python 3.10.13
 2. Install the required packages from requirements.txt
+3. Install tensorflow 2.11.0 from another source e.g. conda
 
 
 ## Instructions
