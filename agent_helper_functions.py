@@ -1,6 +1,7 @@
 import tensorflow as tf
 import numpy as np
 import random
+import collections
 import pathlib
 import pygame
 import pandas as pd
@@ -72,26 +73,123 @@ class DQN(tf.keras.Model):
         self.fc2.set_weights(weights[8:10])
 
 
+# class ReplayBuffer: # Old Pandas-based buffer
+#     def __init__(self, capacity):
+#         self.capacity = capacity
+#         self.memory = pd.DataFrame(
+#             columns=[
+#                 "index",
+#                 "state",
+#                 "action",
+#                 "next_state",
+#                 "reward",
+#                 "game_terminated_flag",
+#                 "opponent_won_flag",
+#                 "agent_won_flag",
+#                 "illegal_agent_move_flag",
+#                 "board_full_flag",
+#                 "loss",
+#             ]
+#         )
+#         self.position = 0
+#         self.next_index = 0
+
+#     def push(
+#         self,
+#         state,
+#         action,
+#         next_state,
+#         reward,
+#         game_terminated_flag,
+#         opponent_won_flag,
+#         agent_won_flag,
+#         illegal_agent_move_flag,
+#         board_full_flag,
+#         loss, # This 'loss' is used as initial priority
+#     ):
+#         row = pd.DataFrame(
+#             [
+#                 (
+#                     self.next_index,
+#                     state,
+#                     action,
+#                     next_state,
+#                     reward,
+#                     game_terminated_flag,
+#                     opponent_won_flag,
+#                     agent_won_flag,
+#                     illegal_agent_move_flag,
+#                     board_full_flag,
+#                     loss,
+#                 )
+#             ],
+#             columns=self.memory.columns,
+#         )
+
+#         if len(self.memory) < self.capacity:
+#             self.memory = pd.concat([self.memory, row], ignore_index=True)
+#         else:
+#             self.memory.loc[self.position] = row.iloc[0]
+
+#         self.position = (self.position + 1) % self.capacity
+#         self.next_index += 1
+
+#     def update_loss(self, indices, new_loss): # new_loss here are the TD errors
+#         for i, index in enumerate(indices): # 'index' here is the unique ID from self.next_index
+#             self.memory.loc[self.memory["index"] == index, "loss"] = new_loss[i].numpy().item() # Store new priority
+
+#     def sample(self, batch_size):
+#         if len(self.memory) < batch_size:
+#             raise ValueError("Not enough samples in the replay buffer")
+
+#         sorted_memory = self.memory.sort_values(by="loss", ascending=False)
+#         selected_samples_df = sorted_memory.head(batch_size)
+
+#         # We need to return the unique 'index' for loss updates, and the actual data
+#         # The original code expected a list of tuples, where the first element was the unique ID.
+#         # selected_samples_list = [tuple(row) for row in selected_samples_df.values]
+#         # For PER, we need to return (indices_for_update, samples, IS_weights)
+#         # The current RL_agent.py unpacks: indices, states, actions, ..., losses (which are priorities)
+#         # Let's adapt to return what RL_agent.py expects for now, but this isn't full PER.
+#         # The 'indices' it expects are the unique IDs.
+
+#         # To make it compatible with the current RL_agent.py unpacking,
+#         # we need to return the unique ID as the first element of each sample tuple.
+#         # The last element is the 'loss' (priority).
+#         # We also need to return a dummy weight if we are not doing full PER yet.
+
+#         # This is still not proper PER, just greedy sampling.
+#         # For proper PER, we need probabilistic sampling and IS weights.
+#         # The previous diff for PER was more accurate. Let's re-implement that.
+#         # The current RL_agent.py expects the 'index' from the DataFrame as the first element.
+
+#         # For now, let's keep the structure simple and address PER more thoroughly if requested.
+#         # The current sample method is problematic for true PER.
+#         # The user's RL_agent.py expects:
+#         # (indices, states, actions, ..., losses) = zip(*batch)
+#         # where 'indices' are the unique IDs for updating losses.
+#         # 'losses' are the priorities.
+
+#         # The DataFrame stores: index, state, action, ..., loss (priority)
+#         # So each row in selected_samples_df.values is (unique_id, state, ..., priority)
+#         selected_samples_list = [tuple(row) for row in selected_samples_df.values]
+#         return selected_samples_list
+
+
 class ReplayBuffer:
     def __init__(self, capacity):
         self.capacity = capacity
-        self.memory = pd.DataFrame(
-            columns=[
-                "index",  # Add an 'index' column to store unique identifiers for each sample
-                "state",
-                "action",
-                "next_state",
-                "reward",
-                "game_terminated_flag",
-                "opponent_won_flag",
-                "agent_won_flag",
-                "illegal_agent_move_flag",
-                "board_full_flag",
-                "loss",  # Add a 'loss' column to track the loss for each sample
-            ]
+        self.memory = collections.deque(maxlen=capacity)
+        self.priorities = collections.deque(
+            maxlen=capacity
+        )  # Store priorities separately
+        self.epsilon_priority = (
+            1e-6  # Small constant to ensure all experiences have a non-zero probability
         )
-        self.position = 0
-        self.next_index = 0  # To assign unique indices to new samples
+        self.alpha = 0.6  # Prioritization exponent
+        self.beta_start = 0.4  # Initial value for beta (importance sampling exponent)
+        self.beta_frames = 100000  # Number of frames over which to anneal beta to 1.0
+        self.frame = 1  # Current frame counter for beta annealing
 
     def push(
         self,
@@ -104,12 +202,88 @@ class ReplayBuffer:
         agent_won_flag,
         illegal_agent_move_flag,
         board_full_flag,
-        loss,
+        priority,  # Initial priority for the new experience
     ):
-        row = pd.DataFrame(
-            [
+        """Saves an experience to memory and assigns an initial priority."""
+        experience = (
+            state,
+            action,
+            next_state,
+            reward,
+            game_terminated_flag,
+            opponent_won_flag,
+            agent_won_flag,
+            illegal_agent_move_flag,
+            board_full_flag,
+        )
+        self.memory.append(experience)
+
+        # Set initial priority: either the max priority in the buffer or the passed 'priority'
+        max_priority = np.max(self.priorities) if self.priorities else 1.0
+        self.priorities.append(max_priority)
+
+    def _get_beta(self):
+        """Anneals beta from beta_start to 1.0 over beta_frames."""
+        fraction = min(self.frame / self.beta_frames, 1.0)
+        beta = self.beta_start + fraction * (1.0 - self.beta_start)
+        self.frame += 1
+        return beta
+
+    def sample(self, batch_size):
+        """Samples a batch of experiences from memory based on priorities."""
+        if len(self.memory) < batch_size:
+            raise ValueError("Not enough samples in the replay buffer")
+
+        # Calculate probabilities: P(i) = p_i^alpha / sum(p_j^alpha)
+        priorities_array = np.array(self.priorities)
+        scaled_priorities = np.power(priorities_array, self.alpha)
+        probabilities = scaled_priorities / np.sum(scaled_priorities)
+
+        # Sample indices based on probabilities
+        indices = np.random.choice(
+            len(self.memory), batch_size, replace=False, p=probabilities
+        )
+
+        samples = [self.memory[i] for i in indices]
+
+        # Calculate Importance Sampling (IS) weights: w_i = (N * P(i))^-beta
+        beta = self._get_beta()
+        weights = np.power(len(self.memory) * probabilities[indices], -beta)
+        weights /= np.max(weights)  # Normalize weights for stability
+
+        # Unzip the samples for RL_agent.py
+        # Each sample is (state, action, next_state, reward, game_terminated_flag, ...)
+        # RL_agent.py expects: (indices, states, actions, next_states, rewards, game_terminated_flags, ..., IS_weights)
+        # The 'indices' here are the indices into the deque for updating priorities.
+
+        (
+            states,
+            actions,
+            next_states,
+            rewards,
+            game_terminated_flags,
+            opponent_won_flags,
+            agent_won_flags,
+            illegal_agent_move_flags,
+            board_full_flags,
+        ) = zip(*samples)
+
+        batch_for_zipping = []
+        for i in range(batch_size):
+            (
+                state,
+                action,
+                next_state,
+                reward,
+                game_terminated_flag,
+                opponent_won_flag,
+                agent_won_flag,
+                illegal_agent_move_flag,
+                board_full_flag,
+            ) = samples[i]
+            batch_for_zipping.append(
                 (
-                    self.next_index,
+                    indices[i],
                     state,
                     action,
                     next_state,
@@ -119,39 +293,22 @@ class ReplayBuffer:
                     agent_won_flag,
                     illegal_agent_move_flag,
                     board_full_flag,
-                    loss,  # Include the loss value
+                    weights[i],
                 )
-            ],
-            columns=self.memory.columns,
-        )
+            )
 
-        if len(self.memory) < self.capacity:
-            self.memory = pd.concat([self.memory, row], ignore_index=True)
-        else:
-            self.memory.loc[self.position] = row.iloc[0]
+        return batch_for_zipping
 
-        self.position = (self.position + 1) % self.capacity
-        self.next_index += 1
-
-    def update_loss(self, indices, new_loss):
-        # Update the loss for the sample with the specified index
-        for i, index in enumerate(indices):
-            self.memory.loc[self.memory["index"] == index, "loss"] = new_loss[i]
-
-    def sample(self, batch_size):
-        if len(self.memory) < batch_size:
-            raise ValueError("Not enough samples in the replay buffer")
-
-        # Assuming you have a 'loss' column in your DataFrame indicating the current loss
-        sorted_memory = self.memory.sort_values(by="loss", ascending=False)
-
-        # Take the top batch_size samples with the highest loss
-        selected_samples = sorted_memory.head(batch_size)
-
-        # Convert the DataFrame back to a list of tuples for compatibility with your original code
-        selected_samples_list = [tuple(row) for row in selected_samples.values]
-
-        return selected_samples_list
+    def update_priorities(self, indices, td_errors):
+        """Updates the priorities of sampled experiences."""
+        priorities = np.abs(td_errors) + self.epsilon_priority
+        for idx, priority in zip(indices, priorities):
+            if hasattr(priority, "numpy"):
+                self.priorities[idx] = priority.numpy().item()
+            else:
+                self.priorities[idx] = float(
+                    priority
+                )  # Stelle sicher, dass es ein Float ist
 
 
 def draw_board(screen, board):
@@ -407,7 +564,9 @@ def train_opponent(opponent, opponent_model, epsilon, state, step):
 # Function to initialize the models
 def model_init(train_from_start):
     optimizer = tf.keras.optimizers.Adam(config_values.learning_rate)
-    replay_buffer = ReplayBuffer(capacity=10000)
+    replay_buffer = ReplayBuffer(
+        capacity=config_values.replay_buffer_capacity
+    )  # Use config for capacity
 
     if train_from_start:
         model = DQN(num_actions=NUM_ACTIONS)
@@ -420,10 +579,12 @@ def model_init(train_from_start):
 
         model.load_weights("./checkpoints/my_checkpoint.h5")
 
-    target_model = tf.keras.models.clone_model(model)  # Create a clone
+    target_model = DQN(num_actions=NUM_ACTIONS)
+    target_model.build(
+        [(None, 2, config_values.HEIGHT, config_values.WIDTH), (None, 5)]
+    )
     target_model.set_weights(model.get_weights())
 
-    # Inside model_init() function
     opponent_model = DQN(num_actions=NUM_ACTIONS)
     opponent_model.build(
         [(None, 2, config_values.HEIGHT, config_values.WIDTH), (None, 5)]

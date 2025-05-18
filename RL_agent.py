@@ -60,7 +60,7 @@ if __name__ == "__main__":
     )
 
     for episode in range(1, config_values.num_episodes + 1):
-        print("New episode starting:")
+        print(f"New episode starting :{episode}/{config_values.num_episodes}")
         print("*" * 50)
         state = np.zeros(
             (1, 2, config_values.HEIGHT, config_values.WIDTH), dtype=np.float32
@@ -108,7 +108,7 @@ if __name__ == "__main__":
                         agent_won_flag=1,
                         illegal_agent_move_flag=0,
                         board_full_flag=0,
-                        loss=1000000,
+                        priority=1.0,  # Initial high priority for new experiences
                     )
 
                     game_ended = True
@@ -158,7 +158,7 @@ if __name__ == "__main__":
                             agent_won_flag=0,
                             illegal_agent_move_flag=0,
                             board_full_flag=0,
-                            loss=1000000,
+                            priority=1.0,
                         )
                         game_ended = True
 
@@ -173,7 +173,7 @@ if __name__ == "__main__":
                             agent_won_flag=0,
                             illegal_agent_move_flag=0,
                             board_full_flag=0,
-                            loss=1000000,
+                            priority=1.0,
                         )
                     next_state = (
                         next_state_opponent.copy()
@@ -194,7 +194,7 @@ if __name__ == "__main__":
                     agent_won_flag=0,
                     illegal_agent_move_flag=0,
                     board_full_flag=1,
-                    loss=1000000,
+                    priority=1.0,
                 )
                 game_ended = True
             elif not game_ended:  # agent makes illegal move
@@ -210,7 +210,7 @@ if __name__ == "__main__":
                     agent_won_flag=0,
                     illegal_agent_move_flag=1,
                     board_full_flag=0,
-                    loss=1000000,
+                    priority=1.0,
                 )
                 print("Episode ended by agent illegal move")
                 game_ended = True
@@ -231,9 +231,9 @@ if __name__ == "__main__":
                     agent_won_flags,
                     illegal_agent_move_flags,
                     board_full_flags,
-                    losses,
+                    is_weights,  # Importance Sampling Weights
                 ) = zip(*batch)
-                indices = np.array(indices)
+                indices = np.array(indices, dtype=np.int32)
                 states = np.concatenate(states)
                 actions = np.array(actions, dtype=np.int32).reshape(-1, 1)
                 next_states = np.concatenate(next_states)
@@ -247,7 +247,7 @@ if __name__ == "__main__":
                     illegal_agent_move_flags, dtype=np.float32
                 )
                 board_full_flags = np.array(board_full_flags, dtype=np.float32)
-                losses = np.array(losses)
+                is_weights = np.array(is_weights, dtype=np.float32).reshape(-1, 1)
 
                 with tf.GradientTape() as tape:
                     flags = np.column_stack(
@@ -283,14 +283,18 @@ if __name__ == "__main__":
                         1 - game_terminated_flags.reshape(-1, 1)
                     )
 
-                    loss = tf.square(
-                        current_q_values - target_q_values
-                    )  # element-wise squared error
-                    # Update loss in replay buffer for PER (using the element-wise loss)
-                    replay_buffer.update_loss(indices, loss)
-                    batch_loss = tf.reduce_sum(loss)
-                    # Append loss to the list for visualization
-                    episode_losses.append(loss.numpy())
+                    td_error = current_q_values - target_q_values
+
+                    # Update priorities in replay buffer using absolute TD error
+                    abs_td_error = tf.abs(td_error)
+                    replay_buffer.update_priorities(indices, abs_td_error)
+
+                    # Calculate weighted loss for gradient update
+                    # Loss is (TD_error)^2 * IS_weight
+                    weighted_loss = tf.square(td_error) * is_weights
+                    batch_loss = tf.reduce_sum(weighted_loss)
+
+                    episode_losses.append(batch_loss.numpy())
 
                     # Log loss to TensorBoard
                     with summary_writer.as_default():

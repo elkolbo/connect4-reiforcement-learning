@@ -3,6 +3,7 @@ class config:
         #################################
         ##### Adjust variables here #####
         #################################
+        self.replay_buffer_capacity = 10000
 
         self.num_episodes = 5000
         self.learning_rate = 0.001
@@ -13,11 +14,11 @@ class config:
 
         self.epsilon_start = 0.9
         self.epsilon_end = 0.1
-        self.epsilon_decay = 0.99
+        self.epsilon_decay = 0.999
         self.target_update_frequency = 200
         self.batch_size = 64
 
-        self.visualization_frequency = 100  # Put in a high value to train faster
+        self.visualization_frequency = 1000  # Put in a high value to train faster
 
         self.opponent_switch_interval = 3
 
