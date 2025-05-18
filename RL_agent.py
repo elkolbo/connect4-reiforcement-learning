@@ -44,7 +44,7 @@ pygame.display.set_caption("Connect 4")
 clock = pygame.time.Clock()
 
 if __name__ == "__main__":
-    (model, opponent_model, replay_buffer, optimizer) = model_init(
+    (model, opponent_model, target_model, replay_buffer, optimizer) = model_init(
         config_values.train_from_start
     )
 
@@ -114,11 +114,12 @@ if __name__ == "__main__":
                     game_ended = True
 
                 else:  # move was a "normal" game move, game continues
-                    if is_blocking_opponent(
-                        state[0], action
-                    ):  # check if the move leads to a win if opponent did it
-                        # Reward for blocking the opponent
-                        reward += 20
+                    # FIXME: The is_blocking_opponent logic in agent_helper_functions.py is problematic.
+                    # if is_blocking_opponent(
+                    #     state[0], action
+                    # ):
+                    #     # Reward for blocking the opponent
+                    #     reward += 20
                     # calculate opponennts move
 
                     opponent_action = train_opponent(
@@ -268,14 +269,24 @@ if __name__ == "__main__":
                         keepdims=True,
                     )
 
-                    next_q_values = model([next_states, flags])
+                    # For next_q_values, we should use neutral flags, as these flags describe the S->S' transition,
+                    # not the inherent properties of S' for future rewards.
+                    # Ideally, use a target_model here as well.
+                    neutral_flags_for_next_state = np.zeros_like(flags)
+                    next_q_values = target_model(
+                        [next_states, neutral_flags_for_next_state]
+                    )
                     next_q_values = tf.reduce_max(next_q_values, axis=1, keepdims=True)
 
-                    target_q_values = rewards + gamma * next_q_values
+                    # Ensure future reward is 0 if the state was terminal
+                    target_q_values = rewards + gamma * next_q_values * (
+                        1 - game_terminated_flags.reshape(-1, 1)
+                    )
 
                     loss = tf.square(
                         current_q_values - target_q_values
-                    )  # squared error to get positive loss
+                    )  # element-wise squared error
+                    # Update loss in replay buffer for PER (using the element-wise loss)
                     replay_buffer.update_loss(indices, loss)
                     batch_loss = tf.reduce_sum(loss)
                     # Append loss to the list for visualization
@@ -312,23 +323,24 @@ if __name__ == "__main__":
                 )
                 pygame.display.flip()
                 pygame.display.update()  # forced display update
-                pygame.time.wait(2000)
-                # wait for a bit to make it easier to follow visualization
+                pygame.time.wait(200)
+                # Wait for a bit to make it easier to follow visualization.
+                # Consider reducing wait time or frequency for faster overall training.
 
             # Inside the training loop
         if episode % target_update_frequency == 0:
             model_weights = model.get_weights()
             opponent_model_weights = opponent_model.get_weights()
 
-            # Print the shapes of the weights to identify any mismatches
-            for w1, w2 in zip(model_weights, opponent_model_weights):
-                pass
-                # print(w1.shape, w2.shape)
-
             opponent_model.set_weights(model_weights)
+
+            target_model.set_weights(model.get_weights())
 
         if episode % 10 == 0:
             print(f"Episode: {episode}, Epsilon: {epsilon:.3f}")
+
+        if episode % 1000 == 0:
+            model.save_weights(f"./checkpoints/my_checkpoint_epochs{episode}.h5")
 
     print("Training complete.")
 

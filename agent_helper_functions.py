@@ -56,8 +56,11 @@ class DQN(tf.keras.Model):
         x = tf.concat([x, flags_output], axis=-1)
 
         # Common dense layers
+        x = self.fc1(x)
         output = self.fc2(x)
-        output.set_shape((None, NUM_ACTIONS))  # Adjust NUM_ACTIONS as needed
+        output.set_shape(
+            (None, self.fc2.units)
+        )  # Ensure shape consistency using layer's units
         return output
 
     def set_custom_weights(self, weights):
@@ -307,6 +310,7 @@ def check_win(board):
 
 
 def is_blocking_opponent(board, action_column):
+    # FIXME: This logic is incorrect. It checks if the opponent would win by playing in action_column.
     # Copy the board to simulate the effect of placing a disc in the specified column
     temp_board = np.copy(board)
 
@@ -325,16 +329,16 @@ def is_blocking_opponent(board, action_column):
 
 
 def next_empty_row(board, action):
-    try:
-        for row in range(config_values.HEIGHT):
-            if board[0, row, action] == 0 and board[1, row, action] == 0:
-                next = row
-                break
-            else:
-                continue
-        return next
-    except:
-        pass
+    # Iterates from bottom to top, which is not how Connect4 drops work.
+    # It should find the lowest available row.
+    # The board state representation is (channel, row, col).
+    # Channel 0: agent, Channel 1: opponent.
+    # A cell is empty if board[0, row, action] == 0 AND board[1, row, action] == 0.
+    # This function is called with state[0] from RL_agent.py, so board has shape (2, H, W)
+    for r in range(config_values.HEIGHT - 1, -1, -1):  # Start from bottom row
+        if board[0, r, action] == 0 and board[1, r, action] == 0:
+            return r
+    return None  # Column is full or error
 
 
 # Function to calculate the reward
@@ -416,6 +420,9 @@ def model_init(train_from_start):
 
         model.load_weights("./checkpoints/my_checkpoint.h5")
 
+    target_model = tf.keras.models.clone_model(model)  # Create a clone
+    target_model.set_weights(model.get_weights())
+
     # Inside model_init() function
     opponent_model = DQN(num_actions=NUM_ACTIONS)
     opponent_model.build(
@@ -425,6 +432,7 @@ def model_init(train_from_start):
     return (
         model,
         opponent_model,
+        target_model,
         replay_buffer,
         optimizer,
     )
