@@ -605,14 +605,14 @@ def get_rl_action(board, model):
     q_values = model(
         [state, np.expand_dims(np.zeros(5), axis=0)]
     )  # all the flags are 0s
-    return np.argmax(q_values)
+    return np.argmax(q_values), q_values
 
 
 # Convert Connect 4 board to NumPy array and make input indifferent
 def board_to_numpy(board, current_player):
     array = np.zeros((config_values.HEIGHT, config_values.WIDTH, 2), dtype=np.float32)
-    array[:, :, 0] = board == current_player  # Current player's discs
-    array[:, :, 1] = board == 3 - current_player  # Opponent's discs
+    array[:, :, 0] = (np.array(board) == current_player) * 1  # Current player's discs
+    array[:, :, 1] = (np.array(board) == 3 - current_player) * 1  # Opponent's discs
     return array.transpose((2, 0, 1))[np.newaxis, :]  # Add batch dimension
 
 

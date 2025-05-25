@@ -69,7 +69,7 @@ def main():
             # Add logic for RL agent's move
             if current_player == cf.RL_PLAYER:
                 # Get the RL agent's action
-                rl_action = get_rl_action(board, model)
+                rl_action, q_values = get_rl_action(board, model)
                 print(rl_action)
                 # Update the board based on the RL agent's move
                 if drop_disc(board, rl_action, current_player):
