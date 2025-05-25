@@ -147,7 +147,7 @@ if __name__ == "__main__":
                         print("EPISODE ENDED BY WIN OF OPPONENT")
                         print(next_state_opponent[0])
                         print("#" * 30)
-                        reward = -100
+                        reward = -1000
                         replay_buffer.push(
                             state,
                             action,

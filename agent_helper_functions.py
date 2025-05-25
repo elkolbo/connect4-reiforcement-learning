@@ -28,33 +28,19 @@ class DQN(tf.keras.Model):
         self.conv3 = Conv2D(
             64, (3, 3), strides=(1, 1), padding="same", activation="relu"
         )
-        self.flatten = Flatten()
-
-        # Layers for processing flags
-        self.flag_fc = Dense(64, activation="relu")  # Adjust the size as needed
-        self.flag_output = Dense(1, activation="sigmoid")
+        self.flatten = Flatten()  # Flatten the output of the convolutional layers
 
         # Common dense layers
         self.fc1 = Dense(256, activation="relu")
         self.fc2 = Dense(num_actions)
 
     def call(self, inputs):
-        # Separate game field and flags
-        game_field = inputs[0]
-        flags = inputs[1]
-
+        game_field = inputs
         # Process game field
         x = self.conv1(game_field)
         x = self.conv2(x)
         x = self.conv3(x)
-        x = self.flatten(x)
-
-        # Process flags separately
-        flags_output = self.flag_fc(flags)
-        flags_output = self.flag_output(flags_output)
-
-        # Concatenate the processed game field and flags
-        x = tf.concat([x, flags_output], axis=-1)
+        x = self.flatten(x)  # Flatten after convolutions
 
         # Common dense layers
         x = self.fc1(x)
@@ -420,7 +406,7 @@ STATE_SHAPE = (
 
 # Epsilon-Greedy Exploration
 def epsilon_greedy_action(state, epsilon, model):
-    q_values = model([state, np.expand_dims(np.zeros(5), axis=0)])
+    q_values = model(state)
     if np.random.rand() < epsilon:
         random_move = True
         return np.random.randint(NUM_ACTIONS), q_values, random_move  # Explore
@@ -571,14 +557,12 @@ def model_init(train_from_start):
     if train_from_start:
         model = DQN(num_actions=NUM_ACTIONS)
         model.build([(None, 2, config_values.HEIGHT, config_values.WIDTH), (None, 5)])
-        model.compile(optimizer="adam", loss="mse")
+        model.build((None, 2, config_values.HEIGHT, config_values.WIDTH))
     else:
         model = DQN(num_actions=NUM_ACTIONS)
-        model.build([(None, 2, config_values.HEIGHT, config_values.WIDTH), (None, 5)])
-        model.compile(optimizer="adam", loss="mse")
+        model.build((None, 2, config_values.HEIGHT, config_values.WIDTH))
 
         model.load_weights("./checkpoints/my_checkpoint.h5")
-
     target_model = DQN(num_actions=NUM_ACTIONS)
     target_model.build(
         [(None, 2, config_values.HEIGHT, config_values.WIDTH), (None, 5)]
@@ -602,9 +586,7 @@ def model_init(train_from_start):
 # Function to get RL action when playing game ->used in other code
 def get_rl_action(board, model):
     state = board_to_numpy(board, 2)
-    q_values = model(
-        [state, np.expand_dims(np.zeros(5), axis=0)]
-    )  # all the flags are 0s
+    q_values = model(state)
     return np.argmax(q_values), q_values
 
 
