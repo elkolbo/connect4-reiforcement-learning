@@ -556,7 +556,6 @@ def model_init(train_from_start):
 
     if train_from_start:
         model = DQN(num_actions=NUM_ACTIONS)
-        model.build([(None, 2, config_values.HEIGHT, config_values.WIDTH), (None, 5)])
         model.build((None, 2, config_values.HEIGHT, config_values.WIDTH))
     else:
         model = DQN(num_actions=NUM_ACTIONS)
@@ -564,15 +563,11 @@ def model_init(train_from_start):
 
         model.load_weights("./checkpoints/my_checkpoint.h5")
     target_model = DQN(num_actions=NUM_ACTIONS)
-    target_model.build(
-        [(None, 2, config_values.HEIGHT, config_values.WIDTH), (None, 5)]
-    )
+    target_model.build((None, 2, config_values.HEIGHT, config_values.WIDTH))
     target_model.set_weights(model.get_weights())
 
     opponent_model = DQN(num_actions=NUM_ACTIONS)
-    opponent_model.build(
-        [(None, 2, config_values.HEIGHT, config_values.WIDTH), (None, 5)]
-    )
+    opponent_model.build((None, 2, config_values.HEIGHT, config_values.WIDTH))
 
     return (
         model,
