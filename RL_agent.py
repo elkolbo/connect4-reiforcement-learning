@@ -151,7 +151,7 @@ if __name__ == "__main__":
                         replay_buffer.push(
                             state,
                             action,
-                            next_state,
+                            next_state_opponent,
                             reward,
                             game_terminated_flag=1,
                             opponent_won_flag=1,
@@ -166,7 +166,7 @@ if __name__ == "__main__":
                         replay_buffer.push(
                             state,
                             action,
-                            next_state,
+                            next_state_opponent,
                             reward,
                             game_terminated_flag=0,
                             opponent_won_flag=0,
@@ -250,33 +250,23 @@ if __name__ == "__main__":
                 is_weights = np.array(is_weights, dtype=np.float32).reshape(-1, 1)
 
                 with tf.GradientTape() as tape:
-                    flags = np.column_stack(
-                        [
-                            game_terminated_flags,
-                            opponent_won_flags,
-                            agent_won_flags,
-                            illegal_agent_move_flags,
-                            board_full_flags,
-                        ],
-                    )
-
-                    current_q_values = model([states, flags])
+                    current_q_values_all_actions = model(states)
                     one_hot = tf.squeeze(tf.one_hot(actions, NUM_ACTIONS), axis=1)
-                    current_q_values = one_hot * current_q_values
+                    # Select Q-value for the action taken
+                    current_q_values = one_hot * current_q_values_all_actions
                     current_q_values = tf.reduce_sum(
                         current_q_values,
                         axis=-1,
                         keepdims=True,
                     )
 
-                    # For next_q_values, we should use neutral flags, as these flags describe the S->S' transition,
-                    # not the inherent properties of S' for future rewards.
-                    # Ideally, use a target_model here as well.
-                    neutral_flags_for_next_state = np.zeros_like(flags)
-                    next_q_values = target_model(
-                        [next_states, neutral_flags_for_next_state]
+                    # Get Q-values for the next states from the target model
+                    next_q_values_all_actions = target_model(next_states)
+                    # Use Double DQN: select max action from online model, get Q-value from target model
+                    # For standard DQN, just take max from target_model's output:
+                    next_q_values = tf.reduce_max(
+                        next_q_values_all_actions, axis=1, keepdims=True
                     )
-                    next_q_values = tf.reduce_max(next_q_values, axis=1, keepdims=True)
 
                     # Ensure future reward is 0 if the state was terminal
                     target_q_values = rewards + gamma * next_q_values * (
