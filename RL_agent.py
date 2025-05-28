@@ -30,8 +30,6 @@ tensorboard_callback = tf.keras.callbacks.TensorBoard(
     log_dir=log_dir, write_graph=True, update_freq="epoch"
 )
 
-# Initialize episode_losses list
-episode_losses = []
 
 # intit pygame to visualize
 pygame.init()
@@ -69,6 +67,9 @@ if __name__ == "__main__":
         step = 0
         epsilon = max(epsilon_end, epsilon_start * epsilon_decay**episode)
         game_ended = False
+        current_episode_batch_losses = (
+            []
+        )  # List to store batch losses for the current episode
 
         current_opponent = choose_opponent(
             episode, config_values.opponent_switch_interval
@@ -90,7 +91,8 @@ if __name__ == "__main__":
                     1  # updation state, channel 0 is always for agent
                 )
                 next_state_opponent = next_state.copy()
-                reward = calculate_reward(next_state[0], action, current_player=1)
+                # Pass the agent's plane (H,W) AFTER the move, the action column, and the action row (empty_row)
+                reward = calculate_reward(next_state[0, 0, :, :], action, empty_row)
                 # agent made legal move, now check the outcome of the move:
 
                 if check_win(next_state[0]):  # agent won
@@ -197,8 +199,20 @@ if __name__ == "__main__":
                     priority=1.0,
                 )
                 game_ended = True
-            elif not game_ended:  # agent makes illegal move
-                reward = -50
+            elif not game_ended:
+                print("--- AGENT CHOSE ILLEGAL MOVE (TRAINING) ---")
+                print(f"Current State (Agent's view channel 0):\n{state[0,0,:,:]}")
+                print(f"Current State (Opponent's view channel 1):\n{state[0,1,:,:]}")
+                print(f"Chosen illegal action column: {action}")
+                # Re-evaluate Q-values for this state without exploration to see greedy choice
+                _, q_values_for_illegal_log, _ = epsilon_greedy_action(
+                    state, 0, model
+                )  # Epsilon = 0
+                print(f"Q-values for this state: {q_values_for_illegal_log.numpy()}")
+                print(
+                    "-----------------------------------------"
+                )  # agent makes illegal move
+                reward = -1001
                 next_state = state.copy()
                 replay_buffer.push(
                     state,
@@ -260,13 +274,27 @@ if __name__ == "__main__":
                         keepdims=True,
                     )
 
-                    # Get Q-values for the next states from the target model
-                    next_q_values_all_actions = target_model(next_states)
                     # Use Double DQN: select max action from online model, get Q-value from target model
-                    # For standard DQN, just take max from target_model's output:
-                    next_q_values = tf.reduce_max(
-                        next_q_values_all_actions, axis=1, keepdims=True
+                    # 1. Get the best actions for next_states from the online model
+                    next_actions_from_online_model = tf.argmax(
+                        model(next_states), axis=1
                     )
+                    # 2. Get all Q-values for next_states from the target model
+                    next_q_values_from_target_model_all = target_model(next_states)
+                    # 3. Select the Q-values from the target model corresponding to the best actions chosen by the online model
+                    # We need to create indices for tf.gather_nd
+                    batch_indices = tf.range(
+                        tf.shape(next_actions_from_online_model)[0], dtype=tf.int64
+                    )
+                    action_indices = tf.stack(
+                        [batch_indices, next_actions_from_online_model], axis=1
+                    )
+                    next_q_values = tf.gather_nd(
+                        next_q_values_from_target_model_all, action_indices
+                    )
+                    next_q_values = tf.expand_dims(
+                        next_q_values, axis=1
+                    )  # Ensure it's (batch_size, 1)
 
                     # Ensure future reward is 0 if the state was terminal
                     target_q_values = rewards + gamma * next_q_values * (
@@ -283,13 +311,7 @@ if __name__ == "__main__":
                     # Loss is (TD_error)^2 * IS_weight
                     weighted_loss = tf.square(td_error) * is_weights
                     batch_loss = tf.reduce_sum(weighted_loss)
-
-                    episode_losses.append(batch_loss.numpy())
-
-                    # Log loss to TensorBoard
-                    with summary_writer.as_default():
-                        tf.summary.scalar("Loss", batch_loss.numpy(), step=episode)
-                        tf.summary.scalar("Epsilon", epsilon, step=episode)
+                    current_episode_batch_losses.append(batch_loss.numpy())
 
                 gradients = tape.gradient(batch_loss, model.trainable_variables)
                 # Clip gradients to stabilize training
@@ -322,6 +344,16 @@ if __name__ == "__main__":
                 # Consider reducing wait time or frequency for faster overall training.
 
             # Inside the training loop
+        # At the end of the episode, log the average batch loss and other episode-level metrics
+        with summary_writer.as_default():
+            if current_episode_batch_losses:  # Ensure there were training steps
+                average_episode_loss = np.mean(current_episode_batch_losses)
+                tf.summary.scalar(
+                    "Average Batch Loss per Episode", average_episode_loss, step=episode
+                )
+            tf.summary.scalar("Epsilon", epsilon, step=episode)
+            # You can add other episode-level summary statistics here, e.g., total reward for the episode
+
         if episode % target_update_frequency == 0:
             model_weights = model.get_weights()
             opponent_model_weights = opponent_model.get_weights()
