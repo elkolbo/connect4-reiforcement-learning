@@ -47,9 +47,15 @@ if __name__ == "__main__":
     )
 
     gamma = config_values.gamma
-    epsilon_start = config_values.epsilon_start
-    epsilon_end = config_values.epsilon_end
-    epsilon_decay = config_values.epsilon_decay
+
+    epsilon_scheduler = EpsilonScheduler(
+        config_values.epsilon_start,
+        config_values.epsilon_end,
+        config_values.num_episodes,
+        config_values.reach_target_epsilon,
+        "linear",
+    )
+
     target_update_frequency = config_values.target_update_frequency
     batch_size = config_values.batch_size
 
@@ -65,7 +71,7 @@ if __name__ == "__main__":
         )
         done = False
         step = 0
-        epsilon = max(epsilon_end, epsilon_start * epsilon_decay**episode)
+        epsilon = epsilon_scheduler.calculate_epsilon(episode)
         game_ended = False
         current_episode_batch_losses = (
             []
@@ -76,6 +82,8 @@ if __name__ == "__main__":
         )  # Self, Random or Ascending_Columns
 
         pygame.event.pump()
+        rewards_episode_log = []
+
         while not done and step < max_steps_per_episode and not game_ended:
             # move of the RL agent
             action, q_values, random_move = epsilon_greedy_action(state, epsilon, model)
@@ -200,18 +208,23 @@ if __name__ == "__main__":
                 )
                 game_ended = True
             elif not game_ended:
-                print("--- AGENT CHOSE ILLEGAL MOVE (TRAINING) ---")
-                print(f"Current State (Agent's view channel 0):\n{state[0,0,:,:]}")
-                print(f"Current State (Opponent's view channel 1):\n{state[0,1,:,:]}")
-                print(f"Chosen illegal action column: {action}")
-                # Re-evaluate Q-values for this state without exploration to see greedy choice
-                _, q_values_for_illegal_log, _ = epsilon_greedy_action(
-                    state, 0, model
-                )  # Epsilon = 0
-                print(f"Q-values for this state: {q_values_for_illegal_log.numpy()}")
-                print(
-                    "-----------------------------------------"
-                )  # agent makes illegal move
+                if not random_move:  # report if illegal move was actively chosen
+                    print("--- AGENT CHOSE ILLEGAL MOVE (TRAINING) ---")
+                    print(f"Current State (Agent's view channel 0):\n{state[0,0,:,:]}")
+                    print(
+                        f"Current State (Opponent's view channel 1):\n{state[0,1,:,:]}"
+                    )
+                    print(f"Chosen illegal action column: {action}")
+                    # Re-evaluate Q-values for this state without exploration to see greedy choice
+                    _, q_values_for_illegal_log, _ = epsilon_greedy_action(
+                        state, 0, model
+                    )  # Epsilon = 0
+                    print(
+                        f"Q-values for this state: {q_values_for_illegal_log.numpy()}"
+                    )
+                    print(
+                        "-----------------------------------------"
+                    )  # agent makes illegal move
                 reward = -1001
                 next_state = state.copy()
                 replay_buffer.push(
@@ -343,6 +356,7 @@ if __name__ == "__main__":
                 # Wait for a bit to make it easier to follow visualization.
                 # Consider reducing wait time or frequency for faster overall training.
 
+            rewards_episode_log.append(reward)
             # Inside the training loop
         # At the end of the episode, log the average batch loss and other episode-level metrics
         with summary_writer.as_default():
@@ -352,6 +366,13 @@ if __name__ == "__main__":
                     "Average Batch Loss per Episode", average_episode_loss, step=episode
                 )
             tf.summary.scalar("Epsilon", epsilon, step=episode)
+
+            if rewards_episode_log:
+                avg_reward = np.array(rewards_episode_log).mean()
+                tf.summary.scalar(
+                    "Average reward during episode", avg_reward, step=episode
+                )
+
             # You can add other episode-level summary statistics here, e.g., total reward for the episode
 
         if episode % target_update_frequency == 0:

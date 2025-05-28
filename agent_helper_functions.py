@@ -20,13 +20,13 @@ class DQN(tf.keras.Model):
         super(DQN, self).__init__()
         # Layers for processing the game field
         self.conv1 = Conv2D(
-            32, (3, 3), strides=(1, 1), padding="same", activation="relu"
+            32, (4, 4), strides=(1, 1), padding="same", activation="relu"
         )
         self.conv2 = Conv2D(
-            64, (3, 3), strides=(1, 1), padding="same", activation="relu"
+            64, (4, 4), strides=(1, 1), padding="same", activation="relu"
         )
         self.conv3 = Conv2D(
-            64, (3, 3), strides=(1, 1), padding="same", activation="relu"
+            64, (4, 4), strides=(1, 1), padding="same", activation="relu"
         )
         self.flatten = Flatten()  # Flatten the output of the convolutional layers
 
@@ -57,109 +57,6 @@ class DQN(tf.keras.Model):
         self.conv3.set_weights(weights[4:6])
         self.fc1.set_weights(weights[6:8])
         self.fc2.set_weights(weights[8:10])
-
-
-# class ReplayBuffer: # Old Pandas-based buffer
-#     def __init__(self, capacity):
-#         self.capacity = capacity
-#         self.memory = pd.DataFrame(
-#             columns=[
-#                 "index",
-#                 "state",
-#                 "action",
-#                 "next_state",
-#                 "reward",
-#                 "game_terminated_flag",
-#                 "opponent_won_flag",
-#                 "agent_won_flag",
-#                 "illegal_agent_move_flag",
-#                 "board_full_flag",
-#                 "loss",
-#             ]
-#         )
-#         self.position = 0
-#         self.next_index = 0
-
-#     def push(
-#         self,
-#         state,
-#         action,
-#         next_state,
-#         reward,
-#         game_terminated_flag,
-#         opponent_won_flag,
-#         agent_won_flag,
-#         illegal_agent_move_flag,
-#         board_full_flag,
-#         loss, # This 'loss' is used as initial priority
-#     ):
-#         row = pd.DataFrame(
-#             [
-#                 (
-#                     self.next_index,
-#                     state,
-#                     action,
-#                     next_state,
-#                     reward,
-#                     game_terminated_flag,
-#                     opponent_won_flag,
-#                     agent_won_flag,
-#                     illegal_agent_move_flag,
-#                     board_full_flag,
-#                     loss,
-#                 )
-#             ],
-#             columns=self.memory.columns,
-#         )
-
-#         if len(self.memory) < self.capacity:
-#             self.memory = pd.concat([self.memory, row], ignore_index=True)
-#         else:
-#             self.memory.loc[self.position] = row.iloc[0]
-
-#         self.position = (self.position + 1) % self.capacity
-#         self.next_index += 1
-
-#     def update_loss(self, indices, new_loss): # new_loss here are the TD errors
-#         for i, index in enumerate(indices): # 'index' here is the unique ID from self.next_index
-#             self.memory.loc[self.memory["index"] == index, "loss"] = new_loss[i].numpy().item() # Store new priority
-
-#     def sample(self, batch_size):
-#         if len(self.memory) < batch_size:
-#             raise ValueError("Not enough samples in the replay buffer")
-
-#         sorted_memory = self.memory.sort_values(by="loss", ascending=False)
-#         selected_samples_df = sorted_memory.head(batch_size)
-
-#         # We need to return the unique 'index' for loss updates, and the actual data
-#         # The original code expected a list of tuples, where the first element was the unique ID.
-#         # selected_samples_list = [tuple(row) for row in selected_samples_df.values]
-#         # For PER, we need to return (indices_for_update, samples, IS_weights)
-#         # The current RL_agent.py unpacks: indices, states, actions, ..., losses (which are priorities)
-#         # Let's adapt to return what RL_agent.py expects for now, but this isn't full PER.
-#         # The 'indices' it expects are the unique IDs.
-
-#         # To make it compatible with the current RL_agent.py unpacking,
-#         # we need to return the unique ID as the first element of each sample tuple.
-#         # The last element is the 'loss' (priority).
-#         # We also need to return a dummy weight if we are not doing full PER yet.
-
-#         # This is still not proper PER, just greedy sampling.
-#         # For proper PER, we need probabilistic sampling and IS weights.
-#         # The previous diff for PER was more accurate. Let's re-implement that.
-#         # The current RL_agent.py expects the 'index' from the DataFrame as the first element.
-
-#         # For now, let's keep the structure simple and address PER more thoroughly if requested.
-#         # The current sample method is problematic for true PER.
-#         # The user's RL_agent.py expects:
-#         # (indices, states, actions, ..., losses) = zip(*batch)
-#         # where 'indices' are the unique IDs for updating losses.
-#         # 'losses' are the priorities.
-
-#         # The DataFrame stores: index, state, action, ..., loss (priority)
-#         # So each row in selected_samples_df.values is (unique_id, state, ..., priority)
-#         selected_samples_list = [tuple(row) for row in selected_samples_df.values]
-#         return selected_samples_list
 
 
 class ReplayBuffer:
@@ -353,14 +250,17 @@ def visualize_training(screen, q_values, random_action, action, reward, opponent
             color = (255, 0, 0)
         else:
             color = (10, 10, 255)
+        value_norm = (
+            (value.numpy() / np.max(q_values.numpy())) * 1.5 * config_values.CELL_SIZE
+        )
         pygame.draw.rect(
             screen,
             color,
             (
-                col * config_values.CELL_SIZE + 0.25 * config_values.CELL_SIZE,
-                config_values.WINDOW_HEIGHT - int(value.numpy() * 200),
-                config_values.CELL_SIZE * 0.5,
-                int(value.numpy() * 200),
+                col * config_values.CELL_SIZE + 0.25 * config_values.CELL_SIZE,  # x
+                1.3 * config_values.CELL_SIZE - int(value_norm),  # y (move up)
+                config_values.CELL_SIZE * 0.5,  # width
+                int(value_norm),
             ),
         )
 
@@ -369,7 +269,7 @@ def visualize_training(screen, q_values, random_action, action, reward, opponent
         q_value_text = font_q_values.render(f"{value:.3f}", True, (255, 255, 255))
         screen.blit(
             q_value_text,
-            (col * config_values.CELL_SIZE, config_values.WINDOW_HEIGHT - 20),
+            (col * config_values.CELL_SIZE, 1.3 * config_values.CELL_SIZE),
         )
     # display reward of state
     font_reward = pygame.font.Font(None, 36)
@@ -485,21 +385,24 @@ def next_empty_row(board, action):
 
 
 # Function to calculate the reward
-def calculate_reward(board, action, current_player):
-    # Default reward
+def calculate_reward(agent_board_plane_after_move, action_column, action_row):
+    """
+    Calculates intermediate rewards for the agent's move.
+    Assumes agent_board_plane_after_move is the agent's plane AFTER the move (H, W).
+    action_column and action_row are where the agent just placed its piece.
+    """
     reward = 0
 
-    # check if board has free spaces (not necessary but doesn't hurt)
-    if np.sum(board) < config_values.HEIGHT * config_values.WIDTH:
-        # Check if the column is full
-        adjacent_count = count_adjacent_discs(board, action)
-        reward += 0.1 * adjacent_count  # Increase reward based on the count
+    # Small base reward for making a legal, non-terminal move
+    reward += 0.5  # Tunable (e.g., 0.1 to 1.0)
 
-        # Reward for a valid move
-        reward += 1  # Give a small reward for a valid move
-
-    else:
-        print("BOARD IS FULL!!")
+    # Reward for connecting to existing friendly pieces
+    adjacent_friendly_discs = count_adjacent_discs(
+        agent_board_plane_after_move, action_column, action_row
+    )
+    reward += (
+        0.2 * adjacent_friendly_discs
+    )  # Tunable (e.g., 0.1 to 0.5 per adjacent disc)
 
     return reward
 
@@ -508,25 +411,28 @@ def calculate_reward(board, action, current_player):
 #     return False
 
 
-def count_adjacent_discs(board, action_column):
-    # check surrounings and count discs
+def count_adjacent_discs(agent_board_plane, action_column, action_row):
+    """
+    Counts friendly discs adjacent to the newly placed piece on the agent's board plane.
+    - agent_board_plane: A (H, W) numpy array representing the agent's pieces (1s and 0s).
+    - action_column: The column where the new piece was placed.
+    - action_row: The row where the new piece was placed.
+    """
     count = 0
-    action_row = 0
-    for row in range(config_values.HEIGHT):  # find row in which ction was taken
-        if board[0, row, action_column] == 1:
-            action_row = row
+    # Iterate over the 8 neighbors
+    for r_offset in [-1, 0, 1]:
+        for c_offset in [-1, 0, 1]:
+            if r_offset == 0 and c_offset == 0:
+                continue  # Don't count the piece itself
 
-    # go around disc with catching errors
-    for row_offset in [-1, 0, 1]:
-        for column_offset in [-1, 0, 1]:
-            try:
-                if (
-                    board[0, action_row + row_offset, action_column + column_offset]
-                    == 1
-                ):
+            check_row, check_col = action_row + r_offset, action_column + c_offset
+
+            if (
+                0 <= check_row < config_values.HEIGHT
+                and 0 <= check_col < config_values.WIDTH
+            ):
+                if agent_board_plane[check_row, check_col] == 1:
                     count += 1
-            except:
-                pass
     return count
 
 
@@ -619,5 +525,48 @@ def choose_opponent(episode, opponent_switch_interval):
             current_opponent = "ascending_columns"
     else:
         current_opponent = "self"
-
+    print(f"Opponent: {current_opponent}")
     return current_opponent
+
+
+class EpsilonScheduler:
+    def __init__(
+        self,
+        epsilon_start: float,
+        epsilon_end: float,
+        num_episodes: int,
+        reach_target_epsilon: float,
+        mode: str = "linear",
+    ):
+        self.num_episodes = num_episodes
+        self.epsilon_start = epsilon_start
+        self.epsilon_end = epsilon_end
+        self.reach_target_epsilon = reach_target_epsilon
+
+        if mode == "linear":
+            self.epsilon_calculation = self.linear_model
+        elif mode == "quadratic":
+            self.epsilon_calculation = self.quadratic_model
+        else:
+            raise ValueError(f"Unknown epsilon mode: {mode}")
+
+    def linear_model(self, episode: int):
+        progress = min(
+            (1.0 / self.reach_target_epsilon) * (episode / self.num_episodes), 1
+        )
+        epsilon = (1 - progress) * (
+            self.epsilon_start - self.epsilon_end
+        ) + self.epsilon_end
+        return epsilon
+
+    def quadratic_model(self, episode: int):
+        progress = min(
+            (1.0 / self.reach_target_epsilon) * (episode / self.num_episodes), 1
+        )
+        epsilon = (1 - progress**2) * (
+            self.epsilon_start - self.epsilon_end
+        ) + self.epsilon_end
+        return epsilon
+
+    def calculate_epsilon(self, episode: int):
+        return self.epsilon_calculation(episode)
