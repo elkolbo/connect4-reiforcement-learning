@@ -4,9 +4,10 @@ import tensorflow as tf
 from RL_agent import get_rl_action, DQN
 from game_functions import *
 from config import config
+import numpy as np
 
 
-cf = config() # config values
+cf = config()  # config values
 
 
 # Function to draw the Connect 4 board
@@ -108,7 +109,9 @@ def check_draw(board):
 
 # Function to reset the game
 def reset_game():
-    return [[0] * cf.WIDTH for _ in range(cf.HEIGHT)]
+    empty_board = [[0] * cf.WIDTH for _ in range(cf.HEIGHT)]
+    start_player = np.random.randint(1, 3)
+    return empty_board, start_player
 
 
 # Function to display the end screen

@@ -24,8 +24,7 @@ def main():
 
     clock = pygame.time.Clock()
 
-    board = reset_game()
-    current_player = 2
+    board, current_player = reset_game()
 
     # Initialize game statistics
     your_wins = 0
@@ -56,21 +55,23 @@ def main():
                             end_screen(
                                 "You Win!", screen, your_wins, rl_agent_wins, draws
                             )
-                            board = reset_game()
+                            board, current_player = reset_game()
                         elif check_draw(board):
                             draws += 1
                             draw_board(screen, board)
                             end_screen(
                                 "It's a Draw!", screen, your_wins, rl_agent_wins, draws
                             )
-                            board = reset_game()
+                            board, current_player = reset_game()
                         else:
                             current_player = 3 - current_player  # Switch players
             # Add logic for RL agent's move
             if current_player == cf.RL_PLAYER:
                 # Get the RL agent's action
                 rl_action, q_values = get_rl_action(board, model)
+                print("*" * 10)
                 print(rl_action)
+                print(q_values)
                 # Update the board based on the RL agent's move
                 if drop_disc(board, rl_action, current_player):
                     if check_win(board, current_player):
@@ -79,14 +80,14 @@ def main():
                         end_screen(
                             "RL-Agent Wins!", screen, your_wins, rl_agent_wins, draws
                         )
-                        board = reset_game()
+                        board, current_player = reset_game()
                     elif check_draw(board):
                         draws += 1
                         draw_board(screen, board)
                         end_screen(
                             "It's a Draw!", screen, your_wins, rl_agent_wins, draws
                         )
-                        board = reset_game()
+                        board, current_player = reset_game()
                     else:
                         current_player = 3 - current_player  # Switch players
                 elif drop_disc(
@@ -98,14 +99,14 @@ def main():
                         end_screen(
                             "RL-Agent Wins!", screen, your_wins, rl_agent_wins, draws
                         )
-                        board = reset_game()
+                        board, current_player = reset_game()
                     elif check_draw(board):
                         draws += 1
                         draw_board(screen, board)
                         end_screen(
                             "It's a Draw!", screen, your_wins, rl_agent_wins, draws
                         )
-                        board = reset_game()
+                        board, current_player = reset_game()
                     else:
                         current_player = 3 - current_player  # Switch players
 
