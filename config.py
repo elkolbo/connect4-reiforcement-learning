@@ -4,27 +4,27 @@ class config:
         ##### Adjust variables here #####
         #################################
 
-        self.num_episodes = 5000
-        self.batch_size = 64
+        self.num_episodes = 500000
+        self.batch_size = 128
         self.learning_rate = 0.001
 
-        self.train_from_start = False
+        self.train_from_start = True
 
-        self.target_update_frequency = 600
+        self.target_update_frequency = 400
 
-        self.replay_buffer_capacity = 15000
+        self.replay_buffer_capacity = 25000
 
         self.gamma = 0.8  # Discount factor for q-learning
 
         #### epsilon scheduler ###
-        self.epsilon_start = 0.6
+        self.epsilon_start = 0.95
         self.epsilon_end = 0.05
         self.reach_target_epsilon = (
-            0.5  # percentage of episodes when to reach target epsilon
+            0.7  # percentage of episodes when to reach target epsilon
         )
         self.epsilon_mode = "quadratic"  # alternative: linear; determines model used to calculate epsilon
 
-        self.visualization_frequency = 1000  # Put in a high value to train faster
+        self.visualization_frequency = 100000  # Put in a high value to train faster
 
         self.opponent_switch_interval = 501
 

@@ -35,7 +35,7 @@ class DQN(tf.keras.Model):
         self.fc2 = Dense(num_actions)
 
     def call(self, inputs):
-        game_field = inputs
+        game_field = tf.expand_dims(inputs, 1)
         # Process game field
         x = self.conv1(game_field)
         x = self.conv2(x)
@@ -218,7 +218,7 @@ def draw_board(screen, board):
                 config_values.CELL_SIZE // 2,
                 5,
             )  # Draw grid circles
-            if board[0][row][col] == 1:
+            if board[row][col] == 1:
                 pygame.draw.circle(
                     screen,
                     config_values.RED,
@@ -229,7 +229,7 @@ def draw_board(screen, board):
                     ),
                     config_values.CELL_SIZE // 2 - 5,
                 )
-            elif board[1][row][col] == 1:
+            elif board[row][col] == -1:
                 pygame.draw.circle(
                     screen,
                     config_values.BLUE,
@@ -298,10 +298,10 @@ def visualize_training(screen, q_values, random_action, action, reward, opponent
 # Constants
 NUM_ACTIONS = config_values.WIDTH
 STATE_SHAPE = (
-    2,
+    1,
     config_values.HEIGHT,
     config_values.WIDTH,
-)  # 2 channels for current player, opponent
+)  # 1 channel handels both players
 
 
 # Epsilon-Greedy Exploration
@@ -319,34 +319,38 @@ def epsilon_greedy_action(state, epsilon, model):
 
 
 def check_win(board):
-    players, rows, cols = board.shape
-
+    rows, cols = board.shape
+    boards = [
+        (board == 1).astype(np.float32),  # Agent
+        (board == -1).astype(np.float32),  # Opponent
+    ]  # seperate boards for the 2 players
     # Check for a win in rows
-    for player in range(players):
+    for board in boards:
+
         for row in range(rows):
             for col in range(cols - 3):
-                if np.all(board[player, row, col : col + 4] == 1):
+                if np.all(board[row, col : col + 4] == 1):
                     return True
 
-    # Check for a win in columns
-    for player in range(players):
+        # Check for a win in columns
+
         for col in range(cols):
             for row in range(rows - 3):
-                if np.all(board[player, row : row + 4, col] == 1):
+                if np.all(board[row : row + 4, col] == 1):
                     return True
 
-    # Check for a win in diagonals (from bottom-left to top-right)
-    for player in range(players):
+        # Check for a win in diagonals (from bottom-left to top-right)
+
         for row in range(3, rows):
             for col in range(cols - 3):
-                if np.all(board[player, row - np.arange(4), col + np.arange(4)] == 1):
+                if np.all(board[row - np.arange(4), col + np.arange(4)] == 1):
                     return True
 
-    # Check for a win in diagonals (from top-left to bottom-right)
-    for player in range(players):
+        # Check for a win in diagonals (from top-left to bottom-right)
+
         for row in range(rows - 3):
             for col in range(cols - 3):
-                if np.all(board[player, row + np.arange(4), col + np.arange(4)] == 1):
+                if np.all(board[row + np.arange(4), col + np.arange(4)] == 1):
                     return True
 
     return False
@@ -379,7 +383,7 @@ def next_empty_row(board, action):
     # A cell is empty if board[0, row, action] == 0 AND board[1, row, action] == 0.
     # This function is called with state[0] from RL_agent.py, so board has shape (2, H, W)
     for r in range(config_values.HEIGHT - 1, -1, -1):  # Start from bottom row
-        if board[0, r, action] == 0 and board[1, r, action] == 0:
+        if board[r, action] == 0 and board[r, action] == 0:
             return r
     return None  # Column is full or error
 
@@ -411,10 +415,10 @@ def calculate_reward(agent_board_plane_after_move, action_column, action_row):
 #     return False
 
 
-def count_adjacent_discs(agent_board_plane, action_column, action_row):
+def count_adjacent_discs(board, action_column, action_row):
     """
     Counts friendly discs adjacent to the newly placed piece on the agent's board plane.
-    - agent_board_plane: A (H, W) numpy array representing the agent's pieces (1s and 0s).
+    - board: A (H, W) numpy array representing the pieces where agent pieces are 1
     - action_column: The column where the new piece was placed.
     - action_row: The row where the new piece was placed.
     """
@@ -431,7 +435,7 @@ def count_adjacent_discs(agent_board_plane, action_column, action_row):
                 0 <= check_row < config_values.HEIGHT
                 and 0 <= check_col < config_values.WIDTH
             ):
-                if agent_board_plane[check_row, check_col] == 1:
+                if board[check_row, check_col] == 1:
                     count += 1
     return count
 
@@ -441,10 +445,10 @@ def train_opponent(opponent, opponent_model, epsilon, state, step):
     if opponent == "rand":
         action = np.random.randint(NUM_ACTIONS)
     elif opponent == "self":
-        # flip the current state so the opponent sees his situation on the top layer!!
+        # flip the current state so the opponent sees himself as 1 and not -1
         # otherwise the rl opponent will predict action based on rl agents position
         state_copy = state.copy()
-        state_copy = np.flip(state_copy, axis=1)
+        state_copy = state_copy * -1
         action, _, _ = epsilon_greedy_action(state_copy, epsilon, opponent_model)
     elif opponent == "ascending_columns":
         # Opponent places discs in columns in ascending order
@@ -462,18 +466,18 @@ def model_init(train_from_start):
 
     if train_from_start:
         model = DQN(num_actions=NUM_ACTIONS)
-        model.build((None, 2, config_values.HEIGHT, config_values.WIDTH))
+        model.build((None, 1, config_values.HEIGHT, config_values.WIDTH))
     else:
         model = DQN(num_actions=NUM_ACTIONS)
-        model.build((None, 2, config_values.HEIGHT, config_values.WIDTH))
+        model.build((None, 1, config_values.HEIGHT, config_values.WIDTH))
 
         model.load_weights("./checkpoints/my_checkpoint.h5")
     target_model = DQN(num_actions=NUM_ACTIONS)
-    target_model.build((None, 2, config_values.HEIGHT, config_values.WIDTH))
+    target_model.build((None, 1, config_values.HEIGHT, config_values.WIDTH))
     target_model.set_weights(model.get_weights())
 
     opponent_model = DQN(num_actions=NUM_ACTIONS)
-    opponent_model.build((None, 2, config_values.HEIGHT, config_values.WIDTH))
+    opponent_model.build((None, 1, config_values.HEIGHT, config_values.WIDTH))
 
     return (
         model,
@@ -486,33 +490,33 @@ def model_init(train_from_start):
 
 # Function to get RL action when playing game ->used in other code
 def get_rl_action(board, model):
-    state = board_to_numpy(board, 2)
+    state = board_to_numpy(board)
     q_values = model(state)
     return np.argmax(q_values), q_values
 
 
 # Convert Connect 4 board to NumPy array and make input indifferent
-def board_to_numpy(board, current_player):
-    array = np.zeros((config_values.HEIGHT, config_values.WIDTH, 2), dtype=np.float32)
-    array[:, :, 0] = (np.array(board) == current_player) * 1  # Current player's discs
-    array[:, :, 1] = (np.array(board) == 3 - current_player) * 1  # Opponent's discs
-    return array.transpose((2, 0, 1))[np.newaxis, :]  # Add batch dimension
+def board_to_numpy(board):
+    array = np.zeros((config_values.HEIGHT, config_values.WIDTH), dtype=np.float32)
+    array[np.array(board) == 1] = -1  # human player discs
+    array[np.array(board) == 2] = 1  # RL agent discs
+    return np.expand_dims(array, 0)  # Add batch dimension
 
 
-def numpy_to_board(array, current_player):
+def numpy_to_board(array):
     # Transpose back to the original shape
     array = array.transpose((1, 0, 2))
 
-    # Extract current player's discs and opponent's discs
-    current_player_discs = np.where(array[:, :, 0] == 1)
-    opponent_discs = np.where(array[:, :, 0] == 0)
+    # Extract agent and human discs
+    agent_discs = np.where(array[:, :, 0] == 1)
+    human_discs = np.where(array[:, :, 0] == -1)
 
     # Create an empty board
     board = np.zeros((config_values.HEIGHT, config_values.WIDTH))
 
     # Fill in the board with player and opponent discs
-    board[current_player_discs[0], current_player_discs[1]] = current_player
-    board[opponent_discs[0], opponent_discs[1]] = 3 - current_player
+    board[agent_discs] = 2
+    board[human_discs] = 1
 
     return board
 
