@@ -35,7 +35,7 @@ class DQN(tf.keras.Model):
         self.fc2 = Dense(num_actions)
 
     def call(self, inputs):
-        game_field = tf.expand_dims(inputs, 1)
+        game_field = tf.expand_dims(inputs, -1)
         # Process game field
         x = self.conv1(game_field)
         x = self.conv2(x)
@@ -405,7 +405,7 @@ def calculate_reward(agent_board_plane_after_move, action_column, action_row):
         agent_board_plane_after_move, action_column, action_row
     )
     reward += (
-        0.2 * adjacent_friendly_discs
+        0.0 * adjacent_friendly_discs
     )  # Tunable (e.g., 0.1 to 0.5 per adjacent disc)
 
     return reward
@@ -454,7 +454,17 @@ def train_opponent(opponent, opponent_model, epsilon, state, step):
         # Opponent places discs in columns in ascending order
         action = step % NUM_ACTIONS
     # Add more opponent strategies as needed
-    return action
+
+    # opponent can be "rand" or "self"
+    if np.any(state[0, :, action] == 0):
+        return action
+    else:
+        # opponent chose an illegal move -> picking free column instead
+        for column in range(config_values.WIDTH):
+            if np.any(state[0, :, column] == 0):
+                action = column
+                break
+        return action
 
 
 # Function to initialize the models
@@ -466,18 +476,18 @@ def model_init(train_from_start):
 
     if train_from_start:
         model = DQN(num_actions=NUM_ACTIONS)
-        model.build((None, 1, config_values.HEIGHT, config_values.WIDTH))
+        model.build((None, config_values.HEIGHT, config_values.WIDTH))
     else:
         model = DQN(num_actions=NUM_ACTIONS)
-        model.build((None, 1, config_values.HEIGHT, config_values.WIDTH))
+        model.build((None, config_values.HEIGHT, config_values.WIDTH))
 
         model.load_weights("./checkpoints/my_checkpoint.h5")
     target_model = DQN(num_actions=NUM_ACTIONS)
-    target_model.build((None, 1, config_values.HEIGHT, config_values.WIDTH))
+    target_model.build((None, config_values.HEIGHT, config_values.WIDTH))
     target_model.set_weights(model.get_weights())
 
     opponent_model = DQN(num_actions=NUM_ACTIONS)
-    opponent_model.build((None, 1, config_values.HEIGHT, config_values.WIDTH))
+    opponent_model.build((None, config_values.HEIGHT, config_values.WIDTH))
 
     return (
         model,

@@ -4,7 +4,7 @@ class config:
         ##### Adjust variables here #####
         #################################
 
-        self.num_episodes = 500000
+        self.num_episodes = 100000
         self.batch_size = 128
         self.learning_rate = 0.001
 
@@ -14,7 +14,7 @@ class config:
 
         self.replay_buffer_capacity = 25000
 
-        self.gamma = 0.8  # Discount factor for q-learning
+        self.gamma = 0.95  # Discount factor for q-learning
 
         #### epsilon scheduler ###
         self.epsilon_start = 0.95

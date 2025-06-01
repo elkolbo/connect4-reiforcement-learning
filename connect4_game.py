@@ -14,7 +14,7 @@ pygame.init()
 def main():
     model = DQN()
     model = DQN(num_actions=cf.WIDTH)
-    model.build((None, 1, cf.HEIGHT, cf.WIDTH))
+    model.build((None, cf.HEIGHT, cf.WIDTH))
     model.compile(optimizer="adam", loss="mse")
 
     # Ensure the checkpoint name matches how it's saved in RL_agent.py

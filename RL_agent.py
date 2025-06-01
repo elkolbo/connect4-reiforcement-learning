@@ -70,8 +70,8 @@ if __name__ == "__main__":
             (1, config_values.HEIGHT, config_values.WIDTH), dtype=np.float32
         )
         next_state = state.copy()
-        done = False
         step = 0
+        reward = 0
         epsilon = epsilon_scheduler.calculate_epsilon(episode)
         game_ended = False
         current_episode_batch_losses = (
@@ -86,7 +86,7 @@ if __name__ == "__main__":
         rewards_episode_log = []
         agent_starts = random.choice([True, False])
 
-        while not done and step < max_steps_per_episode and not game_ended:
+        while step < max_steps_per_episode and not game_ended:
 
             # move of the RL agent
             if (step % 2 == 0 and agent_starts) or (step % 2 == 1 and not agent_starts):
@@ -132,13 +132,6 @@ if __name__ == "__main__":
                         reward = calculate_reward(
                             next_state[0, :, :], action, empty_row
                         )
-                        # FIXME: The is_blocking_opponent logic in agent_helper_functions.py is problematic.
-                        # if is_blocking_opponent(
-                        #     state[0], action
-                        # ):
-                        #     # Reward for blocking the opponent
-                        #     reward += 20
-                        # calculate opponennts move
 
                 elif (
                     not np.any(state[0, :, action] == 0) and not game_ended
@@ -179,20 +172,8 @@ if __name__ == "__main__":
                 )
 
                 next_state_opponent = next_state.copy()
-                # opponent can be "rand" or "self"
-                if np.any(next_state[0, :, opponent_action] == 0):
-                    empty_row = next_empty_row(next_state[0], opponent_action)
-                    next_state_opponent[0, empty_row, opponent_action] = (
-                        -1
-                    )  # opponent always has disc -1
-                else:
-                    # opponent chose an illegal move -> picking free column instead
-                    for column in range(config_values.WIDTH):
-                        if np.any(next_state[0, :, column] == 0):
-                            opponent_action = column
-                            break
-                    empty_row = next_empty_row(next_state[0], opponent_action)
-                    next_state_opponent[0, empty_row, opponent_action] = -1
+                empty_row = next_empty_row(next_state[0], opponent_action)
+                next_state_opponent[0, empty_row, opponent_action] = -1
 
                 if check_win(next_state_opponent[0]):  # opponent won
                     print("EPISODE ENDED BY WIN OF OPPONENT")
@@ -231,7 +212,7 @@ if __name__ == "__main__":
                 )  # copy for correct continuation in next episode
 
             # check if board is full after move
-            if np.all(state[0] != 0):
+            if np.all(next_state[0, :, :] != 0):
                 print("EPISODE ENDED BY FULL BOARD")
                 reward = -5
                 replay_buffer.push(
