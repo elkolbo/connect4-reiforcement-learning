@@ -10,7 +10,10 @@ class config:
         self.num_episodes = 200000
         self.batch_size = 128
         self.learning_rate = ExponentialDecay(
-            initial_learning_rate=0.001, decay_steps=self.num_episodes, decay_rate=0.999
+            initial_learning_rate=0.001,
+            decay_steps=self.num_episodes // 30,
+            decay_rate=0.096,
+            staircase=True,
         )
 
         self.train_from_start = True
@@ -29,7 +32,7 @@ class config:
         )
         self.epsilon_mode = "quadratic"  # alternative: linear; determines model used to calculate epsilon
 
-        self.visualization_frequency = 100000  # Put in a high value to train faster
+        self.visualization_frequency = 1000  # Put in a high value to train faster
 
         self.opponent_switch_interval = 501
 
