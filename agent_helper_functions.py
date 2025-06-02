@@ -105,6 +105,24 @@ class ReplayBuffer:
         max_priority = np.max(self.priorities) if self.priorities else 1.0
         self.priorities.append(max_priority)
 
+        # also add mirror state to the replay buffer
+        experience_mirrored = (
+            np.fliplr(state.copy()),
+            (config_values.WIDTH - 1) - action,
+            np.fliplr(next_state.copy()),
+            reward,
+            game_terminated_flag,
+            opponent_won_flag,
+            agent_won_flag,
+            illegal_agent_move_flag,
+            board_full_flag,
+        )
+        self.memory.append(experience_mirrored)
+
+        # Set initial priority: either the max priority in the buffer or the passed 'priority'
+        max_priority = np.max(self.priorities) if self.priorities else 1.0
+        self.priorities.append(max_priority)
+
     def _get_beta(self):
         """Anneals beta from beta_start to 1.0 over beta_frames."""
         fraction = min(self.frame / self.beta_frames, 1.0)
@@ -451,7 +469,9 @@ def train_opponent(opponent, opponent_model, epsilon, state, step):
     elif opponent == "ascending_columns":
         # Opponent places discs in columns in ascending order
         action = step % NUM_ACTIONS
-    # Add more opponent strategies as needed
+    elif opponent == "descending_columns":
+        # Opponent places discs in columns in descending order
+        action = (NUM_ACTIONS - 1) - (step % NUM_ACTIONS)
 
     # opponent can be "rand" or "self"
     if np.any(state[0, :, action] == 0):
@@ -530,13 +550,35 @@ def numpy_to_board(array):
 
 
 def choose_opponent(episode, opponent_switch_interval):
-    if episode % opponent_switch_interval == 0:
-        if np.random.rand() < 0.5:
-            current_opponent = "rand"
-        else:
-            current_opponent = "ascending_columns"
+    """
+    Chooses an opponent based on the current episode and a schedule.
+    Gradually increases the probability of self-play as training progresses.
+    Also includes fixed opponents at certain intervals.
+    """
+    progress = episode / config_values.num_episodes
+
+    # At specific intervals, force a non-self opponent to ensure diversity
+    if episode > 0 and episode % opponent_switch_interval == 0:
+        current_opponent = np.random.choice(
+            ["rand", "ascending_columns", "descending_columns"]
+        )
     else:
-        current_opponent = "self"
+        # Gradually increase chance of self-play
+        # Starts with a lower chance of self-play, e.g., 30%
+        # Ends with a higher chance of self-play, e.g., 90%
+        self_play_probability = (
+            config_values.min_self_play_prob
+            + (config_values.max_self_play_prob - config_values.min_self_play_prob)
+            * progress
+        )
+
+        if np.random.rand() < self_play_probability:
+            current_opponent = "self"
+        else:  # Fallback to a fixed opponent if not self-play
+            current_opponent = np.random.choice(
+                ["rand", "ascending_columns", "descending_columns"]
+            )
+
     print(f"Opponent: {current_opponent}")
     return current_opponent
 

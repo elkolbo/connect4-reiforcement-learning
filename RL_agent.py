@@ -80,7 +80,7 @@ if __name__ == "__main__":
 
         current_opponent = choose_opponent(
             episode, config_values.opponent_switch_interval
-        )  # Self, Random or Ascending_Columns
+        )  # Self, Random or Ascending/descending Columns
 
         pygame.event.pump()
         rewards_episode_log = []
@@ -214,11 +214,11 @@ if __name__ == "__main__":
             # check if board is full after move
             if np.all(next_state[0, :, :] != 0):
                 print("EPISODE ENDED BY FULL BOARD")
-                reward = -0.1
+                reward = 0
                 replay_buffer.push(
                     state,
                     action if action is not None else 0,
-                    state.copy(),
+                    next_state,
                     reward,
                     game_terminated_flag=1,
                     opponent_won_flag=0,

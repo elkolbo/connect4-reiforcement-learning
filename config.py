@@ -10,31 +10,36 @@ class config:
         self.num_episodes = 200000
         self.batch_size = 128
         self.learning_rate = ExponentialDecay(
-            initial_learning_rate=0.001,
-            decay_steps=self.num_episodes // 30,
-            decay_rate=0.96,
+            initial_learning_rate=0.0005,
+            decay_steps=self.num_episodes // 50,
+            decay_rate=0.9,
             staircase=True,
         )
 
         self.train_from_start = True
 
-        self.target_update_frequency = 100
+        self.target_update_frequency = 250
 
-        self.replay_buffer_capacity = 25000
+        self.replay_buffer_capacity = 50000
 
         self.gamma = 0.95  # Discount factor for q-learning
 
         #### epsilon scheduler ###
-        self.epsilon_start = 0.95
+        self.epsilon_start = 1.0
         self.epsilon_end = 0.05
         self.reach_target_epsilon = (
-            0.7  # percentage of episodes when to reach target epsilon
+            0.65  # percentage of episodes when to reach target epsilon
         )
-        self.epsilon_mode = "quadratic"  # alternative: linear; determines model used to calculate epsilon
+        self.epsilon_mode = (
+            "linear"  # alternative: linear; determines model used to calculate epsilon
+        )
 
         self.visualization_frequency = 1000  # Put in a high value to train faster
 
-        self.opponent_switch_interval = 501
+        ##opponent settins
+        self.opponent_switch_interval = 27
+        self.min_self_play_prob = 0.25  # Initial probability of self-play
+        self.max_self_play_prob = 0.95  # Max probability of self-play
 
         # Visualization constants
         self.WIDTH, self.HEIGHT = 7, 6
