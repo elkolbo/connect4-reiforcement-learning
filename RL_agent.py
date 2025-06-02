@@ -111,7 +111,7 @@ if __name__ == "__main__":
                         print("EPISODE ENDED BY WIN OF AGENT")
                         print(next_state[0])
                         print("#" * 30)
-                        reward = 1000
+                        reward = 10
                         replay_buffer.push(
                             state,
                             action,
@@ -150,7 +150,7 @@ if __name__ == "__main__":
                         print(
                             "-----------------------------------------"
                         )  # agent makes illegal move
-                    reward = -1001
+                    reward = -11
                     next_state = state.copy()
                     replay_buffer.push(
                         state,
@@ -179,7 +179,7 @@ if __name__ == "__main__":
                     print("EPISODE ENDED BY WIN OF OPPONENT")
                     print(next_state_opponent[0])
                     print("#" * 30)
-                    reward = -1000
+                    reward = -10
                     replay_buffer.push(
                         state,
                         action,
@@ -214,7 +214,7 @@ if __name__ == "__main__":
             # check if board is full after move
             if np.all(next_state[0, :, :] != 0):
                 print("EPISODE ENDED BY FULL BOARD")
-                reward = -5
+                reward = -0.1
                 replay_buffer.push(
                     state,
                     action if action is not None else 0,

@@ -12,7 +12,7 @@ class config:
         self.learning_rate = ExponentialDecay(
             initial_learning_rate=0.001,
             decay_steps=self.num_episodes // 30,
-            decay_rate=0.096,
+            decay_rate=0.96,
             staircase=True,
         )
 

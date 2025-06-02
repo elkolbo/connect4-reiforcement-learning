@@ -390,21 +390,21 @@ def calculate_reward(agent_board_plane_after_move, action_column, action_row):
     reward = 0
 
     # Small base reward for making a legal, non-terminal move
-    reward += 1  # Tunable (e.g., 0.1 to 1.0)
+    reward += 0.01
 
     # Reward for connecting to existing friendly pieces
     adjacent_friendly_discs = count_adjacent_discs(
         agent_board_plane_after_move, action_column, action_row
     )
     reward += (
-        0.2 * adjacent_friendly_discs
+        0.002 * adjacent_friendly_discs
     )  # Tunable (e.g., 0.1 to 0.5 per adjacent disc)
 
     if is_blocking_opponent(agent_board_plane_after_move, action_column, action_row):
-        reward += 50
+        reward += 0.5
 
     if has_three_in_a_row(agent_board_plane_after_move):
-        reward += 25
+        reward += 0.25
 
     return reward
 
