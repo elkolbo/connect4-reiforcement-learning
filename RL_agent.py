@@ -366,16 +366,15 @@ if __name__ == "__main__":
 
             target_model.set_weights(model.get_weights())
 
-        if episode % 10 == 0:
-            print(f"Episode: {episode}, Epsilon: {epsilon:.3f}")
-
         if episode % 1000 == 0:
-            model.save_weights(f"./checkpoints/my_checkpoint_epochs{episode}.h5")
+            model.save_weights(
+                f"./checkpoints/my_checkpoint_epochs{episode}.weights.h5"
+            )
 
     print("Training complete.")
 
     # Save the weights
-    model.save_weights("./checkpoints/my_checkpoint.h5")
+    model.save_weights("./checkpoints/my_checkpoint.weights.h5")
 
 
 # Close the writer

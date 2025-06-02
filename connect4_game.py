@@ -17,7 +17,7 @@ def main():
     model.compile(optimizer="adam", loss="mse")
 
     # Ensure the checkpoint name matches how it's saved in RL_agent.py
-    model.load_weights("./checkpoints/my_checkpoint.h5")
+    model.load_weights("./checkpoints/my_checkpoint.weights.h5")
     screen = pygame.display.set_mode((cf.WINDOW_WIDTH, cf.WINDOW_HEIGHT))
     pygame.display.set_caption("Connect 4")
 
