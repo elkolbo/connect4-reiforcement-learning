@@ -402,6 +402,10 @@ def calculate_reward(agent_board_plane_after_move, action_column, action_row):
 
     if is_blocking_opponent(agent_board_plane_after_move, action_column, action_row):
         reward += 50
+
+    if has_three_in_a_row(agent_board_plane_after_move):
+        reward += 25
+
     return reward
 
 
@@ -578,3 +582,37 @@ class EpsilonScheduler:
 
     def calculate_epsilon(self, episode: int):
         return self.epsilon_calculation(episode)
+
+
+def has_three_in_a_row(board: np.ndarray) -> bool:
+    rows, cols = board.shape
+    boards = [
+        (board == 1).astype(np.float32),  # Agent
+    ]
+
+    for b in boards:
+        # Horizontal check
+        for row in range(rows):
+            for col in range(cols - 2):
+                if np.all(b[row, col : col + 3] == 1):
+                    return True
+
+        # Vertical check
+        for col in range(cols):
+            for row in range(rows - 2):
+                if np.all(b[row : row + 3, col] == 1):
+                    return True
+
+        # Diagonal (bottom-left to top-right)
+        for row in range(2, rows):
+            for col in range(cols - 2):
+                if np.all(b[row - np.arange(3), col + np.arange(3)] == 1):
+                    return True
+
+        # Diagonal (top-left to bottom-right)
+        for row in range(rows - 2):
+            for col in range(cols - 2):
+                if np.all(b[row + np.arange(3), col + np.arange(3)] == 1):
+                    return True
+
+    return False
