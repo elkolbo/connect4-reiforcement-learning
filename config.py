@@ -1,16 +1,21 @@
+from tensorflow.keras.optimizers.schedules import ExponentialDecay
+
+
 class config:
     def __init__(self):
         #################################
         ##### Adjust variables here #####
         #################################
 
-        self.num_episodes = 100000
+        self.num_episodes = 200000
         self.batch_size = 128
-        self.learning_rate = 0.001
+        self.learning_rate = ExponentialDecay(
+            initial_learning_rate=0.001, decay_steps=self.num_episodes, decay_rate=0.999
+        )
 
         self.train_from_start = True
 
-        self.target_update_frequency = 400
+        self.target_update_frequency = 100
 
         self.replay_buffer_capacity = 25000
 

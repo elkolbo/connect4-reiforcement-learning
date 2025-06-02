@@ -356,20 +356,12 @@ def check_win(board):
     return False
 
 
-def is_blocking_opponent(board, action_column):
-    # FIXME: This logic is incorrect. It checks if the opponent would win by playing in action_column.
-    # Copy the board to simulate the effect of placing a disc in the specified column
+def is_blocking_opponent(board, action_column, action_row):
+
     temp_board = np.copy(board)
 
-    # Find the empty row in the specified column
-    empty_row = next_empty_row(temp_board, action_column)
-
-    if empty_row is None:
-        # The column is full, and placing a disc is not possible
-        return False
-
-    # Place a disc in the specified column
-    temp_board[1, empty_row, action_column] = 1
+    # Place a opponent disc in the specified column nad row
+    temp_board[action_row, action_column] = -1
 
     # Check if this move blocks the opponent from connecting four discs
     return check_win(temp_board)
@@ -398,16 +390,18 @@ def calculate_reward(agent_board_plane_after_move, action_column, action_row):
     reward = 0
 
     # Small base reward for making a legal, non-terminal move
-    reward += 0.5  # Tunable (e.g., 0.1 to 1.0)
+    reward += 1  # Tunable (e.g., 0.1 to 1.0)
 
     # Reward for connecting to existing friendly pieces
     adjacent_friendly_discs = count_adjacent_discs(
         agent_board_plane_after_move, action_column, action_row
     )
     reward += (
-        0.0 * adjacent_friendly_discs
+        0.2 * adjacent_friendly_discs
     )  # Tunable (e.g., 0.1 to 0.5 per adjacent disc)
 
+    if is_blocking_opponent(agent_board_plane_after_move, action_column, action_row):
+        reward += 50
     return reward
 
 

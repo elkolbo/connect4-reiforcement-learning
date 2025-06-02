@@ -323,8 +323,8 @@ if __name__ == "__main__":
 
                 # Calculate weighted loss for gradient update
                 # Loss is (TD_error)^2 * IS_weight
-                weighted_loss = tf.square(td_error) * is_weights
-                batch_loss = tf.reduce_sum(weighted_loss)
+                weighted_loss = tf.square(td_error) * is_weights  # Element-wise
+                batch_loss = tf.reduce_mean(weighted_loss)  # Mean over the batch
                 current_episode_batch_losses.append(batch_loss.numpy())
 
             gradients = tape.gradient(batch_loss, model.trainable_variables)
@@ -346,6 +346,9 @@ if __name__ == "__main__":
                     "Average Batch Loss per Episode", average_episode_loss, step=episode
                 )
             tf.summary.scalar("Epsilon", epsilon, step=episode)
+
+            current_lr = optimizer.learning_rate.numpy()
+            tf.summary.scalar("Learning Rate", current_lr, step=episode)
 
             if rewards_episode_log:
                 avg_reward = np.array(rewards_episode_log).mean()

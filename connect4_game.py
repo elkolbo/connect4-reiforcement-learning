@@ -12,7 +12,6 @@ pygame.init()
 
 # Main game loop
 def main():
-    model = DQN()
     model = DQN(num_actions=cf.WIDTH)
     model.build((None, cf.HEIGHT, cf.WIDTH))
     model.compile(optimizer="adam", loss="mse")
