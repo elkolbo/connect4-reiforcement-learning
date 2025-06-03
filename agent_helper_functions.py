@@ -69,7 +69,7 @@ class ReplayBuffer:
         self.epsilon_priority = (
             1e-6  # Small constant to ensure all experiences have a non-zero probability
         )
-        self.alpha = 0.6  # Prioritization exponent
+        self.alpha = 0.5  # Prioritization exponent
         self.beta_start = 0.4  # Initial value for beta (importance sampling exponent)
         self.beta_frames = 100000  # Number of frames over which to anneal beta to 1.0
         self.frame = 1  # Current frame counter for beta annealing
@@ -457,7 +457,7 @@ def count_adjacent_discs(board, action_column, action_row):
 
 
 # Function to train the opponent
-def train_opponent(opponent, opponent_model, epsilon, state, step):
+def train_opponent(opponent, opponent_model, epsilon, state, step, episode):
     if opponent == "rand":
         action = np.random.randint(NUM_ACTIONS)
     elif opponent == "self":
@@ -472,16 +472,16 @@ def train_opponent(opponent, opponent_model, epsilon, state, step):
     elif opponent == "descending_columns":
         # Opponent places discs in columns in descending order
         action = (NUM_ACTIONS - 1) - (step % NUM_ACTIONS)
+    elif opponent == "stacker":
+        action = episode % NUM_ACTIONS
 
-    # opponent can be "rand" or "self"
     if np.any(state[0, :, action] == 0):
         return action
     else:
-        # opponent chose an illegal move -> picking free column instead
-        for column in range(config_values.WIDTH):
-            if np.any(state[0, :, column] == 0):
-                action = column
-                break
+        # opponent chose an illegal move -> picking random free column instead
+        empty = np.any(state[0, :, :] == 0, axis=0)
+        empty = np.where(empty == True)
+        action = np.random.choice(empty[0])
         return action
 
 
@@ -499,7 +499,7 @@ def model_init(train_from_start):
         model = DQN(num_actions=NUM_ACTIONS)
         model.build((None, config_values.HEIGHT, config_values.WIDTH))
 
-        model.load_weights("./checkpoints/my_checkpoint.h5")
+        model.load_weights("./checkpoints/my_checkpoint.weights.h5")
     target_model = DQN(num_actions=NUM_ACTIONS)
     target_model.build((None, config_values.HEIGHT, config_values.WIDTH))
     target_model.set_weights(model.get_weights())
@@ -560,7 +560,7 @@ def choose_opponent(episode, opponent_switch_interval):
     # At specific intervals, force a non-self opponent to ensure diversity
     if episode > 0 and episode % opponent_switch_interval == 0:
         current_opponent = np.random.choice(
-            ["rand", "ascending_columns", "descending_columns"]
+            ["rand", "ascending_columns", "descending_columns", "stacker"]
         )
     else:
         # Gradually increase chance of self-play
@@ -576,7 +576,7 @@ def choose_opponent(episode, opponent_switch_interval):
             current_opponent = "self"
         else:  # Fallback to a fixed opponent if not self-play
             current_opponent = np.random.choice(
-                ["rand", "ascending_columns", "descending_columns"]
+                ["rand", "ascending_columns", "descending_columns", "stacker"]
             )
 
     print(f"Opponent: {current_opponent}")

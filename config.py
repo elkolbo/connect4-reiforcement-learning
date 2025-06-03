@@ -7,18 +7,19 @@ class config:
         ##### Adjust variables here #####
         #################################
 
-        self.num_episodes = 200000
+        self.num_episodes = 300000
         self.batch_size = 128
         self.learning_rate = ExponentialDecay(
             initial_learning_rate=0.0005,
-            decay_steps=self.num_episodes // 50,
+            decay_steps=self.num_episodes // 60,
             decay_rate=0.9,
             staircase=True,
         )
 
-        self.train_from_start = True
+        self.train_from_start = False
 
         self.target_update_frequency = 250
+        self.opponent_model_update_frequency = 999
 
         self.replay_buffer_capacity = 50000
 
@@ -34,12 +35,12 @@ class config:
             "linear"  # alternative: linear; determines model used to calculate epsilon
         )
 
-        self.visualization_frequency = 1000  # Put in a high value to train faster
+        self.visualization_frequency = 20000  # Put in a high value to train faster
 
         ##opponent settins
         self.opponent_switch_interval = 27
-        self.min_self_play_prob = 0.25  # Initial probability of self-play
-        self.max_self_play_prob = 0.95  # Max probability of self-play
+        self.min_self_play_prob = 0.1  # Initial probability of self-play
+        self.max_self_play_prob = 0.9  # Max probability of self-play
 
         # Visualization constants
         self.WIDTH, self.HEIGHT = 7, 6

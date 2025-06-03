@@ -56,7 +56,6 @@ if __name__ == "__main__":
         config_values.epsilon_mode,
     )
 
-    target_update_frequency = config_values.target_update_frequency
     batch_size = config_values.batch_size
 
     max_steps_per_episode = (
@@ -168,7 +167,7 @@ if __name__ == "__main__":
                     game_ended = True
             else:  # opponents turn
                 opponent_action = train_opponent(
-                    current_opponent, opponent_model, epsilon, next_state, step
+                    current_opponent, opponent_model, epsilon, next_state, step, episode
                 )
 
                 next_state_opponent = next_state.copy()
@@ -247,8 +246,6 @@ if __name__ == "__main__":
                 # Consider reducing wait time or frequency for faster overall training.
             if step > 1:
                 rewards_episode_log.append(reward)
-            # Inside the training loop
-        # At the end of the episode, log the average batch loss and other episode-level metrics
 
         if len(replay_buffer.memory) > batch_size:
             batch = replay_buffer.sample(batch_size)
@@ -290,6 +287,11 @@ if __name__ == "__main__":
                     keepdims=True,
                 )
 
+                # For Q-value stability monitoring
+                avg_q_value_in_batch = tf.reduce_mean(current_q_values_all_actions)
+                max_q_value_in_batch = tf.reduce_max(current_q_values_all_actions)
+                min_q_value_in_batch = tf.reduce_min(current_q_values_all_actions)
+
                 # Use Double DQN: select max action from online model, get Q-value from target model
                 # 1. Get the best actions for next_states from the online model
                 next_actions_from_online_model = tf.argmax(model(next_states), axis=1)
@@ -318,6 +320,7 @@ if __name__ == "__main__":
                 td_error = current_q_values - target_q_values
 
                 # Update priorities in replay buffer using absolute TD error
+                # Ensure abs_td_error is detached from the graph for priority updates
                 abs_td_error = tf.abs(td_error)
                 replay_buffer.update_priorities(indices, abs_td_error)
 
@@ -350,21 +353,34 @@ if __name__ == "__main__":
             current_lr = optimizer.learning_rate.numpy()
             tf.summary.scalar("Learning Rate", current_lr, step=episode)
 
-            if rewards_episode_log:
+            if rewards_episode_log and len(replay_buffer.memory) > batch_size:
                 avg_reward = np.array(rewards_episode_log).mean()
                 tf.summary.scalar(
                     "Average reward during episode", avg_reward, step=episode
                 )
+                # Log Q-value statistics
+                tf.summary.scalar(
+                    "Q-Values/Average Batch Q-Value", avg_q_value_in_batch, step=episode
+                )
+                tf.summary.scalar(
+                    "Q-Values/Max Batch Q-Value", max_q_value_in_batch, step=episode
+                )
+                tf.summary.scalar(
+                    "Q-Values/Min Batch Q-Value", min_q_value_in_batch, step=episode
+                )
+                tf.summary.scalar(
+                    "TD Error/Average Absolute TD Error",
+                    tf.reduce_mean(abs_td_error),
+                    step=episode,
+                )
 
-            # You can add other episode-level summary statistics here, e.g., total reward for the episode
-
-        if episode % target_update_frequency == 0:
-            model_weights = model.get_weights()
-            opponent_model_weights = opponent_model.get_weights()
-
-            opponent_model.set_weights(model_weights)
-
+        if episode % config_values.target_update_frequency == 0:
             target_model.set_weights(model.get_weights())
+            print(f"Target model updated at episode {episode}")
+
+        if episode % config_values.opponent_model_update_frequency == 0:
+            opponent_model.set_weights(model.get_weights())
+            print(f"Opponent model updated at episode {episode}")
 
         if episode % 1000 == 0:
             model.save_weights(
