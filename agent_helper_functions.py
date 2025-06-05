@@ -9,6 +9,7 @@ import pandas as pd
 import os
 from datetime import datetime
 from tensorflow.keras.layers import Conv2D, Flatten, Dense, Concatenate
+from tensorflow.keras import layers
 from config import config
 
 config_values = config()
@@ -16,7 +17,7 @@ config_values = config()
 
 # Deep Q Network (DQN) Model
 class DQN(tf.keras.Model):
-    def __init__(self, num_actions=config_values.WIDTH):
+    def __init__(self, num_actions=config_values.WIDTH):  # Original DQN
         super(DQN, self).__init__()
         # Layers for processing the game field
         self.conv1 = Conv2D(
@@ -50,13 +51,102 @@ class DQN(tf.keras.Model):
         )  # Ensure shape consistency using layer's units
         return output
 
-    def set_custom_weights(self, weights):
-        # Set custom weights for each layer
-        self.conv1.set_weights(weights[0:2])
-        self.conv2.set_weights(weights[2:4])
-        self.conv3.set_weights(weights[4:6])
-        self.fc1.set_weights(weights[6:8])
-        self.fc2.set_weights(weights[8:10])
+
+# Dueling Deep Q Network (Dueling DQN) Model
+class DuelingDQN(tf.keras.Model):
+    def __init__(self, num_actions=config_values.WIDTH):
+        super(DuelingDQN, self).__init__()
+        # Common convolutional layers
+        self.conv1 = Conv2D(
+            32, (4, 4), strides=(1, 1), padding="same", activation="relu"
+        )
+        self.conv2 = Conv2D(
+            64, (4, 4), strides=(1, 1), padding="same", activation="relu"
+        )
+        self.conv3 = Conv2D(
+            64, (4, 4), strides=(1, 1), padding="same", activation="relu"
+        )
+        self.flatten = Flatten()
+
+        # Value stream
+        self.value_fc1 = Dense(128, activation="relu")
+        self.value_fc2 = Dense(1)
+
+        # Advantage stream
+        self.advantage_fc1 = Dense(128, activation="relu")
+        self.advantage_fc2 = Dense(num_actions)
+
+    def call(self, inputs):
+        # Inputs shape: (batch_size, HEIGHT, WIDTH)
+        game_field = tf.expand_dims(
+            inputs, -1
+        )  # Add channel dimension: (batch_size, HEIGHT, WIDTH, 1)
+
+        # Common layers
+        x = self.conv1(game_field)
+        x = self.conv2(x)
+        x = self.conv3(x)
+        x = self.flatten(x)  # Output shape: (batch_size, H*W*filters)
+
+        # Value stream
+        value = self.value_fc1(x)
+        value = self.value_fc2(value)  # Output shape: (batch_size, 1)
+
+        # Advantage stream
+        advantage = self.advantage_fc1(x)
+        advantage = self.advantage_fc2(
+            advantage
+        )  # Output shape: (batch_size, num_actions)
+
+        # Combine streams to get Q-values
+        # Q(s, a) = V(s) + (A(s, a) - mean(A(s, a)))
+        mean_advantage = tf.reduce_mean(
+            advantage, axis=1, keepdims=True
+        )  # Output shape: (batch_size, 1)
+        q_values = value + (
+            advantage - mean_advantage
+        )  # Output shape: (batch_size, num_actions)
+
+        return q_values
+
+
+class SmallDuelingDQN(tf.keras.Model):
+    def __init__(self, num_actions):
+        super(SmallDuelingDQN, self).__init__()
+
+        self.conv = layers.Conv2D(
+            filters=16, kernel_size=(4, 4), activation="relu", padding="same"
+        )
+        self.flatten = layers.Flatten()
+
+        # Shared dense layer
+        self.shared_dense = layers.Dense(64, activation="relu")
+
+        # Value stream
+        self.value_dense = layers.Dense(32, activation="relu")
+        self.value_output = layers.Dense(1)
+
+        # Advantage stream
+        self.adv_dense = layers.Dense(32, activation="relu")
+        self.adv_output = layers.Dense(num_actions)
+
+    def call(self, inputs):
+        game_field = tf.expand_dims(inputs, -1)
+        x = self.conv(game_field)
+        x = self.flatten(x)
+        x = self.shared_dense(x)
+
+        # Value stream
+        v = self.value_dense(x)
+        v = self.value_output(v)
+
+        # Advantage stream
+        a = self.adv_dense(x)
+        a = self.adv_output(a)
+
+        # Combine streams
+        q = v + (a - tf.reduce_mean(a, axis=1, keepdims=True))
+        return q
 
 
 class ReplayBuffer:
@@ -262,14 +352,18 @@ def draw_board(screen, board):
 
 def visualize_training(screen, q_values, random_action, action, reward, opponent):
     q_values = q_values[0]
+    q_values_np = q_values.numpy().flatten()
     for col, value in enumerate(q_values):
         # Draw the bar for each column
-        if value.numpy() == np.max(q_values.numpy()):
+        if q_values_np[col] == np.max(q_values_np):
             color = (255, 0, 0)
         else:
             color = (10, 10, 255)
         value_norm = (
-            (value.numpy() / np.max(q_values.numpy())) * 1.5 * config_values.CELL_SIZE
+            q_values_np[col]
+            / max(np.max(q_values_np), 1e-6)
+            * 1.5
+            * config_values.CELL_SIZE
         )
         pygame.draw.rect(
             screen,
@@ -335,42 +429,34 @@ def epsilon_greedy_action(state, epsilon, model):
 
 # Function to check for a winning move
 
+import time
 
-def check_win(board):
-    rows, cols = board.shape
-    boards = [
-        (board == 1).astype(np.float32),  # Agent
-        (board == -1).astype(np.float32),  # Opponent
-    ]  # seperate boards for the 2 players
-    # Check for a win in rows
-    for board in boards:
 
-        for row in range(rows):
-            for col in range(cols - 3):
-                if np.all(board[row, col : col + 4] == 1):
-                    return True
+def check_win(board, row, col):
 
-        # Check for a win in columns
+    player = board[row, col]
+    if player == 0:
+        return False
 
-        for col in range(cols):
-            for row in range(rows - 3):
-                if np.all(board[row : row + 4, col] == 1):
-                    return True
+    def count_dir(dr, dc):
+        count = 0
+        r, c = row + dr, col + dc
+        while (
+            0 <= r < board.shape[0]
+            and 0 <= c < board.shape[1]
+            and board[r, c] == player
+        ):
+            count += 1
+            r += dr
+            c += dc
+        return count
 
-        # Check for a win in diagonals (from bottom-left to top-right)
-
-        for row in range(3, rows):
-            for col in range(cols - 3):
-                if np.all(board[row - np.arange(4), col + np.arange(4)] == 1):
-                    return True
-
-        # Check for a win in diagonals (from top-left to bottom-right)
-
-        for row in range(rows - 3):
-            for col in range(cols - 3):
-                if np.all(board[row + np.arange(4), col + np.arange(4)] == 1):
-                    return True
-
+    # directions
+    directions = [(0, 1), (1, 0), (1, 1), (1, -1)]
+    for dr, dc in directions:
+        total = 1 + count_dir(dr, dc) + count_dir(-dr, -dc)
+        if total >= 4:
+            return True
     return False
 
 
@@ -382,18 +468,13 @@ def is_blocking_opponent(board, action_column, action_row):
     temp_board[action_row, action_column] = -1
 
     # Check if this move blocks the opponent from connecting four discs
-    return check_win(temp_board)
+    return check_win(temp_board, action_row, action_column)
 
 
 def next_empty_row(board, action):
-    # Iterates from bottom to top, which is not how Connect4 drops work.
-    # It should find the lowest available row.
-    # The board state representation is (channel, row, col).
-    # Channel 0: agent, Channel 1: opponent.
-    # A cell is empty if board[0, row, action] == 0 AND board[1, row, action] == 0.
-    # This function is called with state[0] from RL_agent.py, so board has shape (2, H, W)
+
     for r in range(config_values.HEIGHT - 1, -1, -1):  # Start from bottom row
-        if board[r, action] == 0 and board[r, action] == 0:
+        if board[r, action] == 0:  # Check if the cell is empty (0)
             return r
     return None  # Column is full or error
 
@@ -408,52 +489,15 @@ def calculate_reward(agent_board_plane_after_move, action_column, action_row):
     reward = 0
 
     # Small base reward for making a legal, non-terminal move
-    reward += 0.01
-
-    # Reward for connecting to existing friendly pieces
-    adjacent_friendly_discs = count_adjacent_discs(
-        agent_board_plane_after_move, action_column, action_row
-    )
-    reward += (
-        0.002 * adjacent_friendly_discs
-    )  # Tunable (e.g., 0.1 to 0.5 per adjacent disc)
+    reward += 0.001
 
     if is_blocking_opponent(agent_board_plane_after_move, action_column, action_row):
-        reward += 0.5
+        reward += 0.1
 
-    if has_three_in_a_row(agent_board_plane_after_move):
-        reward += 0.25
+    if placed_three_in_a_row(agent_board_plane_after_move, action_column, action_row):
+        reward += 0.05
 
     return reward
-
-
-# def is_blocking_opponent(board, action_column):
-#     return False
-
-
-def count_adjacent_discs(board, action_column, action_row):
-    """
-    Counts friendly discs adjacent to the newly placed piece on the agent's board plane.
-    - board: A (H, W) numpy array representing the pieces where agent pieces are 1
-    - action_column: The column where the new piece was placed.
-    - action_row: The row where the new piece was placed.
-    """
-    count = 0
-    # Iterate over the 8 neighbors
-    for r_offset in [-1, 0, 1]:
-        for c_offset in [-1, 0, 1]:
-            if r_offset == 0 and c_offset == 0:
-                continue  # Don't count the piece itself
-
-            check_row, check_col = action_row + r_offset, action_column + c_offset
-
-            if (
-                0 <= check_row < config_values.HEIGHT
-                and 0 <= check_col < config_values.WIDTH
-            ):
-                if board[check_row, check_col] == 1:
-                    count += 1
-    return count
 
 
 # Function to train the opponent
@@ -488,24 +532,29 @@ def train_opponent(opponent, opponent_model, epsilon, state, step, episode):
 # Function to initialize the models
 def model_init(train_from_start):
     optimizer = tf.keras.optimizers.Adam(config_values.learning_rate)
-    replay_buffer = ReplayBuffer(
-        capacity=config_values.replay_buffer_capacity
-    )  # Use config for capacity
+    replay_buffer = ReplayBuffer(capacity=config_values.replay_buffer_capacity)
+
+    input_shape = (1, config_values.HEIGHT, config_values.WIDTH)
+    dummy_input = tf.zeros(input_shape, dtype=tf.float32)
 
     if train_from_start:
-        model = DQN(num_actions=NUM_ACTIONS)
+        model = SmallDuelingDQN(num_actions=NUM_ACTIONS)
         model.build((None, config_values.HEIGHT, config_values.WIDTH))
+        _ = model(dummy_input)
     else:
-        model = DQN(num_actions=NUM_ACTIONS)
+        model = SmallDuelingDQN(num_actions=NUM_ACTIONS)
         model.build((None, config_values.HEIGHT, config_values.WIDTH))
+        _ = model(dummy_input)
 
         model.load_weights("./checkpoints/my_checkpoint.weights.h5")
-    target_model = DQN(num_actions=NUM_ACTIONS)
+    target_model = SmallDuelingDQN(num_actions=NUM_ACTIONS)
     target_model.build((None, config_values.HEIGHT, config_values.WIDTH))
+    _ = target_model(dummy_input)
     target_model.set_weights(model.get_weights())
 
-    opponent_model = DQN(num_actions=NUM_ACTIONS)
+    opponent_model = SmallDuelingDQN(num_actions=NUM_ACTIONS)
     opponent_model.build((None, config_values.HEIGHT, config_values.WIDTH))
+    _ = opponent_model(dummy_input)
 
     return (
         model,
@@ -626,35 +675,31 @@ class EpsilonScheduler:
         return self.epsilon_calculation(episode)
 
 
-def has_three_in_a_row(board: np.ndarray) -> bool:
-    rows, cols = board.shape
-    boards = [
-        (board == 1).astype(np.float32),  # Agent
-    ]
+def placed_three_in_a_row(
+    board: np.ndarray,
+    col: int,
+    row: int,
+) -> bool:
+    player = board[row, col]
 
-    for b in boards:
-        # Horizontal check
-        for row in range(rows):
-            for col in range(cols - 2):
-                if np.all(b[row, col : col + 3] == 1):
-                    return True
+    def count_dir(dr, dc):
+        count = 0
+        r, c = row + dr, col + dc
+        while (
+            0 <= r < board.shape[0]
+            and 0 <= c < board.shape[1]
+            and board[r, c] == player
+        ):
+            count += 1
+            r += dr
+            c += dc
+        return count
 
-        # Vertical check
-        for col in range(cols):
-            for row in range(rows - 2):
-                if np.all(b[row : row + 3, col] == 1):
-                    return True
-
-        # Diagonal (bottom-left to top-right)
-        for row in range(2, rows):
-            for col in range(cols - 2):
-                if np.all(b[row - np.arange(3), col + np.arange(3)] == 1):
-                    return True
-
-        # Diagonal (top-left to bottom-right)
-        for row in range(rows - 2):
-            for col in range(cols - 2):
-                if np.all(b[row + np.arange(3), col + np.arange(3)] == 1):
-                    return True
+    # Nur 3er-Reihe zählt
+    directions = [(0, 1), (1, 0), (1, 1), (1, -1)]
+    for dr, dc in directions:
+        total = 1 + count_dir(dr, dc) + count_dir(-dr, -dc)
+        if total == 3:
+            return True
 
     return False

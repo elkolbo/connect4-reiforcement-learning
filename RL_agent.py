@@ -89,9 +89,16 @@ if __name__ == "__main__":
 
             # move of the RL agent
             if (step % 2 == 0 and agent_starts) or (step % 2 == 1 and not agent_starts):
-                action, q_values, random_move = epsilon_greedy_action(
-                    state, epsilon, model
-                )
+
+                if current_opponent == "self":
+
+                    action, q_values, random_move = epsilon_greedy_action(
+                        state, epsilon, model
+                    )
+                else:
+                    action, q_values, random_move = epsilon_greedy_action(
+                        state, epsilon * 0.15, model
+                    )
                 if (
                     np.any(state[0, :, action] == 0) and not game_ended
                 ):  # agent makes legal move and game has not ended
@@ -106,7 +113,7 @@ if __name__ == "__main__":
 
                     # agent made legal move, now check the outcome of the move:
 
-                    if check_win(next_state[0, ...]):  # agent won
+                    if check_win(next_state[0, ...], empty_row, action):  # agent won
                         print("EPISODE ENDED BY WIN OF AGENT")
                         print(next_state[0])
                         print("#" * 30)
@@ -174,7 +181,9 @@ if __name__ == "__main__":
                 empty_row = next_empty_row(next_state[0], opponent_action)
                 next_state_opponent[0, empty_row, opponent_action] = -1
 
-                if check_win(next_state_opponent[0]):  # opponent won
+                if check_win(
+                    next_state_opponent[0], empty_row, opponent_action
+                ):  # opponent won
                     print("EPISODE ENDED BY WIN OF OPPONENT")
                     print(next_state_opponent[0])
                     print("#" * 30)
@@ -244,7 +253,7 @@ if __name__ == "__main__":
                 pygame.time.wait(200)
                 # Wait for a bit to make it easier to follow visualization.
                 # Consider reducing wait time or frequency for faster overall training.
-            if step > 1:
+            if step > 1 and not game_ended:
                 rewards_episode_log.append(reward)
 
         if len(replay_buffer.memory) > batch_size:
@@ -338,13 +347,15 @@ if __name__ == "__main__":
                 [tf.reduce_max(grad) for grad in clipped_gradients]
             )
 
-            # print(f"Unclipped garadients max:{max_gradient}")
-            # print(f"Clipped garadients max:{max_clipped_gradient}")
+            tf.summary.scalar(f"Unclipped garadients max", max_gradient, step=episode)
+            tf.summary.scalar(
+                f"Clipped garadients max", max_clipped_gradient, step=episode
+            )
             optimizer.apply_gradients(zip(clipped_gradients, model.trainable_variables))
 
         with summary_writer.as_default():
-            if current_episode_batch_losses:  # Ensure there were training steps
-                average_episode_loss = np.mean(current_episode_batch_losses)
+            if current_episode_batch_losses:
+                average_episode_loss = np.sum(current_episode_batch_losses)
                 tf.summary.scalar(
                     "Average Batch Loss per Episode", average_episode_loss, step=episode
                 )
@@ -354,9 +365,11 @@ if __name__ == "__main__":
             tf.summary.scalar("Learning Rate", current_lr, step=episode)
 
             if rewards_episode_log and len(replay_buffer.memory) > batch_size:
-                avg_reward = np.array(rewards_episode_log).mean()
+                summed_reward = np.array(rewards_episode_log).sum()
                 tf.summary.scalar(
-                    "Average reward during episode", avg_reward, step=episode
+                    "Summed reward during episode (without terminal reward)",
+                    summed_reward,
+                    step=episode,
                 )
                 # Log Q-value statistics
                 tf.summary.scalar(

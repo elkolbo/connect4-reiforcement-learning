@@ -2,7 +2,12 @@ import pygame
 import sys
 import tensorflow as tf
 import random
-from RL_agent import get_rl_action, DQN
+from agent_helper_functions import (
+    get_rl_action,
+    DuelingDQN,
+    SmallDuelingDQN,
+    DQN,
+)
 from game_functions import *
 
 
@@ -12,7 +17,7 @@ pygame.init()
 
 # Main game loop
 def main():
-    model = DQN(num_actions=cf.WIDTH)
+    model = SmallDuelingDQN(num_actions=cf.WIDTH)  # Use DuelingDQN
     model.build((None, cf.HEIGHT, cf.WIDTH))
     model.compile(optimizer="adam", loss="mse")
 
