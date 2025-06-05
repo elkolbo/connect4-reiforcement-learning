@@ -30,6 +30,8 @@ tensorboard_callback = tf.keras.callbacks.TensorBoard(
     log_dir=log_dir, write_graph=True, update_freq="epoch"
 )
 
+huber_loss_fn = tf.keras.losses.Huber()
+
 
 # intit pygame to visualize
 pygame.init()
@@ -333,9 +335,15 @@ if __name__ == "__main__":
                 abs_td_error = tf.abs(td_error)
                 replay_buffer.update_priorities(indices, abs_td_error)
 
-                # Calculate weighted loss for gradient update
-                # Loss is (TD_error)^2 * IS_weight
-                weighted_loss = tf.square(td_error) * is_weights  # Element-wise
+                loss_values = huber_loss_fn(
+                    y_true=tf.stop_gradient(
+                        target_q_values
+                    ),  # Ensure target is not part of gradient calc
+                    y_pred=current_q_values,
+                )
+                weighted_loss = loss_values * tf.squeeze(
+                    is_weights
+                )  # Element-wise multiplication
                 batch_loss = tf.reduce_mean(weighted_loss)  # Mean over the batch
                 current_episode_batch_losses.append(batch_loss.numpy())
 
@@ -346,12 +354,17 @@ if __name__ == "__main__":
             max_clipped_gradient = tf.reduce_max(
                 [tf.reduce_max(grad) for grad in clipped_gradients]
             )
-
-            tf.summary.scalar(f"Unclipped garadients max", max_gradient, step=episode)
-            tf.summary.scalar(
-                f"Clipped garadients max", max_clipped_gradient, step=episode
-            )
             optimizer.apply_gradients(zip(clipped_gradients, model.trainable_variables))
+
+            with summary_writer.as_default():
+                tf.summary.scalar(
+                    "Gradients/Unclipped garadients max", max_gradient, step=episode
+                )
+                tf.summary.scalar(
+                    "Gradients/Clipped garadients max",
+                    max_clipped_gradient,
+                    step=episode,
+                )
 
         with summary_writer.as_default():
             if current_episode_batch_losses:

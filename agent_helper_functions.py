@@ -539,21 +539,17 @@ def model_init(train_from_start):
 
     if train_from_start:
         model = SmallDuelingDQN(num_actions=NUM_ACTIONS)
-        model.build((None, config_values.HEIGHT, config_values.WIDTH))
         _ = model(dummy_input)
     else:
         model = SmallDuelingDQN(num_actions=NUM_ACTIONS)
-        model.build((None, config_values.HEIGHT, config_values.WIDTH))
         _ = model(dummy_input)
 
         model.load_weights("./checkpoints/my_checkpoint.weights.h5")
     target_model = SmallDuelingDQN(num_actions=NUM_ACTIONS)
-    target_model.build((None, config_values.HEIGHT, config_values.WIDTH))
     _ = target_model(dummy_input)
     target_model.set_weights(model.get_weights())
 
     opponent_model = SmallDuelingDQN(num_actions=NUM_ACTIONS)
-    opponent_model.build((None, config_values.HEIGHT, config_values.WIDTH))
     _ = opponent_model(dummy_input)
 
     return (
